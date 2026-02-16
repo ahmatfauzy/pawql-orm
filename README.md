@@ -12,18 +12,22 @@
 ## Installation
 
 ```bash
-npm install genless
+# Install genless and dependencies
+npm install genless pg
 # or
-bun add genless
+bun add genless pg
 ```
+
+> **Note**: You must install `pg` separately as it is a peer dependency for PostgreSQL support.
 
 ## Usage
 
 Define your schema using standard JavaScript constructors or helper constants:
 
 ```typescript
-import { createDB, number, string, date } from 'genless';
+import { createDB, number, string, boolean, date, PostgresAdapter } from 'genless';
 
+// 1. Define Schema
 const db = createDB({
   users: {
     id: number,
@@ -37,10 +41,25 @@ const db = createDB({
     content: string,
     published: boolean
   }
-});
+}, new PostgresAdapter({
+  connectionString: process.env.DATABASE_URL
+}));
 
-// Now use the db object to query (Implementation pending)
-// const users = await db.query('users').select('id', 'name');
+// 2. Query Data
+async function main() {
+  // Select specific columns with type inference
+  const users = await db.query('users')
+    .select('id', 'name')
+    .where('name', '=', 'Alice')
+    .limit(10);
+  
+  console.log(users); // inferred as { id: number, name: string }[]
+  
+  // Close connection when done
+  await db.close();
+}
+
+main();
 ```
 
 ## Philosophy

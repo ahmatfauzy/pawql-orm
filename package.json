@@ -6,11 +6,18 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node && tsc --emitDeclarationOnly --outDir ./dist",
+    "build": "bun build ./src/index.ts --outdir ./dist --target node --external pg && tsc --emitDeclarationOnly --outDir ./dist",
     "prepublishOnly": "bun run build",
     "test": "bun test"
   },
@@ -25,9 +32,11 @@
   "license": "MIT",
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/pg": "^8.16.0",
     "typescript": "^5"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5",
+    "pg": "^8.18.0"
   }
 }
