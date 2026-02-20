@@ -12,10 +12,10 @@
 - [x] Adapter Interface definition
 - [x] PostgreSQL Adapter (peer dependency: pg)
 - [x] Dummy/Test Adapter
-- [ ] **Table Synchronization (DDL)**: `db.createTables()` to auto-generate SQL tables from JS schema
+- [x] **Table Synchronization (DDL)**: `db.createTables()` to auto-generate SQL tables from JS schema
 - [ ] **Advanced Filtering**: Support `OR`, `IN`, `LIKE`, `IS NULL`, `BETWEEN`
 - [ ] **Data Types**: Support JSON, UUID, Enum, Arrays
-- [ ] **Transactions**: `db.transaction(...)` API
+- [ ] **Transactions**: `db.transaction(...)`   API
 - [ ] **Joins**: Basic `LEFT JOIN` / `INNER JOIN` support
 - [ ] **Migrations**: Basic migration system based on schema diff
 - [ ] **Pool Management**: Better connection pooling options exposed in Adapter

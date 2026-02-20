@@ -1,4 +1,4 @@
-# genless
+# PawQL
 
 **Runtime-first, type-safe database query builder** for Node.js that requires **no code generation** and **no build step**.
 
@@ -13,20 +13,20 @@
 
 COMING SOON
 <!-- ```bash
-# Install genless and dependencies
-npm install genless pg
+# Install PawQL and dependencies
+npm install PawQL pg
 # or
-bun add genless pg
+bun add PawQL pg
 ``` -->
 
-> **Note**: You must install `pg` separately as it is a peer dependency for PostgreSQL support.
+<!-- > **Note**: You must install `pg` separately as it is a peer dependency for PostgreSQL support. -->
 
 ## Usage
 
 Define your schema using standard JavaScript constructors or helper constants:
 
 ```typescript
-import { createDB, number, string, boolean, date, PostgresAdapter } from 'genless';
+import { createDB, number, string, boolean, date, PostgresAdapter } from 'PawQL';
 
 // 1. Define Schema
 const db = createDB({
@@ -86,7 +86,7 @@ main();
 
 ## Philosophy
 
-Most ORMs require a separate schema definition language (Prisma, Drizzle) or complex build steps. `genless` aims to be the query builder that just works with your runtime code, providing full type safety through TypeScript inference.
+Most ORMs require a separate schema definition language (Prisma, Drizzle) or complex build steps. `PawQL` aims to be the query builder that just works with your runtime code, providing full type safety through TypeScript inference.
 
 ## License
 

@@ -1,7 +1,7 @@
 
 /**
  * Interface for database adapters.
- * This allows genless to be database-agnostic while primarily targeting PostgreSQL first.
+ * This allows PawQL to be database-agnostic while primarily targeting PostgreSQL first.
  */
 
 export interface QueryResult<T = any> {

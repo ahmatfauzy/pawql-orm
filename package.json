@@ -1,5 +1,5 @@
 {
-  "name": "genless",
+  "name": "PawQL",
   "version": "0.1.0",
   "description": "Runtime-first, type-safe database query builder for Node.js without code generation.",
   "type": "module",
