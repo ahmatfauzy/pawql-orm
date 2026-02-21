@@ -1,5 +1,6 @@
 src
 test
+docs
 .gitignore
 tsconfig.build.json
 tsconfig.json
