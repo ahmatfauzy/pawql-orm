@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 
 const schema = {
   users: {
@@ -28,7 +28,7 @@ test("Joins - Inner Join generates correct SQL", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.ok(lastLog.sql.includes('INNER JOIN "posts" ON "users"."id" = "posts"."user_id"'));
     assert.ok(lastLog.sql.includes('WHERE "users"."name" = $1'));
@@ -44,7 +44,7 @@ test("Joins - Left Join generates correct SQL", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.ok(lastLog.sql.includes('LEFT JOIN "posts" ON "users"."id" = "posts"."user_id"'));
 });
@@ -67,7 +67,7 @@ test("Joins - Multiple Joins", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.ok(lastLog.sql.includes('INNER JOIN "posts" ON "users"."id" = "posts"."user_id"'));
     assert.ok(lastLog.sql.includes('LEFT JOIN "comments" ON "posts"."id" = "comments"."post_id"'));

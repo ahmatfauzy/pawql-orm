@@ -13,7 +13,8 @@ type WhereOperator =
   | "IN"
   | "NOT IN"
   | "IS"
-  | "IS NOT";
+  | "IS NOT"
+  | "BETWEEN";
 
 type WhereValue = any;
 
@@ -30,6 +31,11 @@ interface JoinClause {
   on: { col1: string; op: string; col2: string };
 }
 
+interface OrderByClause {
+  column: string;
+  direction: "ASC" | "DESC";
+}
+
 type WhereCondition<T> = {
   [K in keyof T]?:
     | T[K] // Equality
@@ -41,6 +47,7 @@ type WhereCondition<T> = {
     | { gte: T[K] }
     | { lte: T[K] }
     | { not: T[K] }
+    | { between: [T[K], T[K]] }
     | null; // IS NULL
 };
 
@@ -62,9 +69,10 @@ export class QueryBuilder<
   private _select: string[] = []; // Changed to string[] to support "table.col"
   private _where: WhereClause<any>[] = []; // Relaxed type for joins
   private _joins: JoinClause[] = [];
+  private _orderByClauses: OrderByClause[] = [];
   private _limit?: number;
   private _offset?: number;
-  private _returning: boolean = false;
+  private _returning: boolean | string[] = false;
 
   constructor(table: string, adapter: DatabaseAdapter) {
     this._table = table;
@@ -76,20 +84,20 @@ export class QueryBuilder<
   insert(data: Partial<TTable> | Partial<TTable>[]): this {
     this._operation = "INSERT";
     this._data = data;
-    this._returning = true;
+    this._returning = true; // Default: RETURNING *
     return this;
   }
 
   update(data: Partial<TTable>): this {
     this._operation = "UPDATE";
     this._data = data;
-    this._returning = true;
+    this._returning = true; // Default: RETURNING *
     return this;
   }
 
   delete(): this {
     this._operation = "DELETE";
-    this._returning = true;
+    this._returning = true; // Default: RETURNING *
     return this;
   }
 
@@ -212,11 +220,23 @@ export class QueryBuilder<
           this._where.push({ type, column, operator: "<=", value: ops.lte });
         if ("not" in ops)
            this._where.push({ type, column, operator: "!=", value: ops.not });
+        if ("between" in ops)
+          this._where.push({ type, column, operator: "BETWEEN", value: ops.between });
       } else {
         // Exact match
         this._where.push({ type, column, operator: "=", value: val });
       }
     }
+  }
+
+  /**
+   * Add ORDER BY clause.
+   * @param column Column name to order by
+   * @param direction 'ASC' or 'DESC' (default: 'ASC')
+   */
+  orderBy(column: string & keyof TTable | string, direction: "ASC" | "DESC" = "ASC"): this {
+    this._orderByClauses.push({ column, direction });
+    return this;
   }
 
   limit(limit: number): this {
@@ -229,12 +249,66 @@ export class QueryBuilder<
     return this;
   }
 
+  /**
+   * Control the RETURNING clause for INSERT/UPDATE/DELETE.
+   * - `.returning('id', 'name')` → RETURNING "id", "name"
+   * - `.returning(false)` → No RETURNING clause
+   * - `.returning(true)` or no call → RETURNING * (default for mutations)
+   */
+  returning(value: false): this;
+  returning(...columns: string[]): this;
+  returning(...args: [false] | string[]): this {
+    if (args[0] === false) {
+      this._returning = false;
+    } else {
+      this._returning = args as string[];
+    }
+    return this;
+  }
+
   // --- Execution ---
 
   async execute(): Promise<TResult[]> {
     const { sql, values } = this.toSQL();
     const result = await this._adapter.query<TResult>(sql, values);
     return result.rows;
+  }
+
+  /**
+   * Execute and return only the first row, or null if no rows.
+   * Automatically adds LIMIT 1.
+   */
+  async first(): Promise<TResult | null> {
+    this._limit = 1;
+    const { sql, values } = this.toSQL();
+    const result = await this._adapter.query<TResult>(sql, values);
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Execute a COUNT(*) query and return the count as a number.
+   */
+  async count(): Promise<number> {
+    const savedSelect = this._select;
+    const savedOperation = this._operation;
+    
+    this._select = [];
+    this._operation = "SELECT";
+    
+    // Build SQL manually with COUNT(*)
+    const tableUser = this._quote(this._table);
+    const values: any[] = [];
+    
+    let sql = `SELECT COUNT(*) FROM ${tableUser}`;
+    sql += this._buildJoins();
+    sql += this._buildWhere(values);
+
+    this._select = savedSelect;
+    this._operation = savedOperation;
+
+    const result = await this._adapter.query<{ count: string | number }>(sql, values);
+    const row = result.rows[0];
+    return row ? Number(row.count) : 0;
   }
 
   then<TResult1 = TResult[], TResult2 = never>(
@@ -260,6 +334,74 @@ export class QueryBuilder<
     return `"${identifier}"`;
   }
 
+  // Helper to build WHERE clause (extracted for reuse in count)
+  private _buildWhere(values: any[]): string {
+    if (this._where.length === 0) return "";
+    
+    const clauses = this._where.map((clause, index) => {
+      let condition = "";
+      const col = this._quote(String(clause.column));
+
+      if (clause.operator === "IN" || clause.operator === "NOT IN") {
+           if (Array.isArray(clause.value) && clause.value.length > 0) {
+               const placeholders = clause.value.map((v: any) => {
+                   values.push(v);
+                   return `$${values.length}`;
+               });
+               condition = `${col} ${clause.operator} (${placeholders.join(", ")})`;
+           } else {
+               condition = clause.operator === "IN" ? "1=0" : "1=1";
+           }
+      } else if (clause.operator === "IS" || clause.operator === "IS NOT") {
+          const val = clause.value === null ? "NULL" : String(clause.value);
+          condition = `${col} ${clause.operator} ${val}`;
+      } else if (clause.operator === "BETWEEN") {
+          if (Array.isArray(clause.value) && clause.value.length === 2) {
+            values.push(clause.value[0]);
+            const p1 = `$${values.length}`;
+            values.push(clause.value[1]);
+            const p2 = `$${values.length}`;
+            condition = `${col} BETWEEN ${p1} AND ${p2}`;
+          } else {
+            throw new Error("BETWEEN requires an array of exactly 2 values");
+          }
+      } else {
+         values.push(clause.value);
+         condition = `${col} ${clause.operator} $${values.length}`;
+      }
+
+      if (index === 0) return condition;
+      return `${clause.type} ${condition}`;
+    });
+
+    return ` WHERE ${clauses.join(" ")}`;
+  }
+
+  // Helper to build JOIN clause (extracted for reuse in count)
+  private _buildJoins(): string {
+    if (this._joins.length === 0) return "";
+    return " " + this._joins.map(j => {
+      return `${j.type} JOIN ${this._quote(j.table)} ON ${this._quote(j.on.col1)} ${j.on.op} ${this._quote(j.on.col2)}`;
+    }).join(" ");
+  }
+
+  // Helper to build ORDER BY clause
+  private _buildOrderBy(): string {
+    if (this._orderByClauses.length === 0) return "";
+    const clauses = this._orderByClauses.map(o => `${this._quote(o.column)} ${o.direction}`);
+    return ` ORDER BY ${clauses.join(", ")}`;
+  }
+
+  // Helper to build RETURNING clause
+  private _buildReturning(): string {
+    if (this._returning === false) return "";
+    if (this._returning === true) return " RETURNING *";
+    if (Array.isArray(this._returning) && this._returning.length > 0) {
+      return ` RETURNING ${this._returning.map(c => this._quote(c)).join(", ")}`;
+    }
+    return " RETURNING *";
+  }
+
   toSQL(): { sql: string; values: any[] } {
     const columns = this._select.length > 0
         ? this._select.map(c => this._quote(c)).join(", ")
@@ -268,52 +410,12 @@ export class QueryBuilder<
     const values: any[] = [];
     let sql = "";
 
-    // Helper to build WHERE clause
-    const buildWhere = (): string => {
-      if (this._where.length === 0) return "";
-      
-      const clauses = this._where.map((clause, index) => {
-        let condition = "";
-        const col = this._quote(String(clause.column));
-
-        if (clause.operator === "IN" || clause.operator === "NOT IN") {
-             if (Array.isArray(clause.value) && clause.value.length > 0) {
-                 const placeholders = clause.value.map(v => {
-                     values.push(v);
-                     return `$${values.length}`;
-                 });
-                 condition = `${col} ${clause.operator} (${placeholders.join(", ")})`;
-             } else {
-                 condition = clause.operator === "IN" ? "1=0" : "1=1";
-             }
-        } else if (clause.operator === "IS" || clause.operator === "IS NOT") {
-            const val = clause.value === null ? "NULL" : String(clause.value);
-            condition = `${col} ${clause.operator} ${val}`;
-        } else {
-           values.push(clause.value);
-           condition = `${col} ${clause.operator} $${values.length}`;
-        }
-
-        if (index === 0) return condition;
-        return `${clause.type} ${condition}`;
-      });
-
-      return ` WHERE ${clauses.join(" ")}`;
-    };
-
-    // Helper to build JOIN clause
-    const buildJoins = (): string => {
-      if (this._joins.length === 0) return "";
-      return " " + this._joins.map(j => {
-        return `${j.type} JOIN ${this._quote(j.table)} ON ${this._quote(j.on.col1)} ${j.on.op} ${this._quote(j.on.col2)}`;
-      }).join(" ");
-    };
-
     switch (this._operation) {
       case "SELECT":
         sql = `SELECT ${columns} FROM ${tableUser}`;
-        sql += buildJoins();
-        sql += buildWhere();
+        sql += this._buildJoins();
+        sql += this._buildWhere(values);
+        sql += this._buildOrderBy();
         if (this._limit !== undefined) sql += ` LIMIT ${this._limit}`;
         if (this._offset !== undefined) sql += ` OFFSET ${this._offset}`;
         break;
@@ -345,7 +447,7 @@ export class QueryBuilder<
         sql = `INSERT INTO ${tableUser} (${quotedKeys.join(
           ", "
         )}) VALUES ${placeHolders.join(", ")}`;
-        if (this._returning) sql += ` RETURNING *`; // Default to * for Insert
+        sql += this._buildReturning();
         break;
 
       case "UPDATE":
@@ -361,19 +463,18 @@ export class QueryBuilder<
         });
 
         sql = `UPDATE ${tableUser} SET ${setClauses.join(", ")}`;
-        sql += buildWhere();
-        if (this._returning) sql += ` RETURNING *`;
+        sql += this._buildWhere(values);
+        sql += this._buildReturning();
         break;
 
       case "DELETE":
         if (this._joins.length > 0) throw new Error("DELETE does not support JOINS directly");
         sql = `DELETE FROM ${tableUser}`;
-        sql += buildWhere();
-        if (this._returning) sql += ` RETURNING *`;
+        sql += this._buildWhere(values);
+        sql += this._buildReturning();
         break;
     }
 
     return { sql, values };
   }
 }
-

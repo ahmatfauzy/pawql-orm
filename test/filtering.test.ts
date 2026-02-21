@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 
 const schema = {
   users: {
@@ -24,7 +24,7 @@ test("Advanced Filtering - OR", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "name" = $1 OR "name" = $2');
     assert.deepStrictEqual(lastLog.params, ["John", "Doe"]);
@@ -39,7 +39,7 @@ test("Advanced Filtering - IN", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "status" IN ($1, $2)');
     assert.deepStrictEqual(lastLog.params, ["active", "pending"]);
@@ -54,7 +54,7 @@ test("Advanced Filtering - LIKE", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "name" LIKE $1');
     assert.deepStrictEqual(lastLog.params, ["%John%"]);
@@ -69,7 +69,7 @@ test("Advanced Filtering - Comparison", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "age" > $1 AND "age" <= $2');
     assert.deepStrictEqual(lastLog.params, [18, 60]);
@@ -84,7 +84,7 @@ test("Advanced Filtering - IS NULL", async () => {
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'SELECT * FROM "users" WHERE "deletedAt" IS NULL');
     assert.deepStrictEqual(lastLog.params, []);

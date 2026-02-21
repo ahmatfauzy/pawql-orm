@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 import { json, uuid, enumType, arrayType } from "../src/types/schema.js";
 
 // ============================================
@@ -82,7 +82,7 @@ test("DDL - JSON column generates JSONB", async () => {
 
   await db.createTables();
 
-  const sql = adapter.logs[0].sql;
+  const sql = adapter.logs[0]!.sql;
   assert.ok(sql.includes('"metadata" JSONB NOT NULL'));
 });
 
@@ -97,7 +97,7 @@ test("DDL - UUID column generates UUID", async () => {
 
   await db.createTables();
 
-  const sql = adapter.logs[0].sql;
+  const sql = adapter.logs[0]!.sql;
   assert.ok(sql.includes('"id" UUID NOT NULL'));
 });
 
@@ -112,7 +112,7 @@ test("DDL - Enum column generates TEXT with CHECK", async () => {
 
   await db.createTables();
 
-  const sql = adapter.logs[0].sql;
+  const sql = adapter.logs[0]!.sql;
   assert.ok(sql.includes(`"role" TEXT NOT NULL CHECK ("role" IN ('admin', 'user', 'guest'))`));
 });
 
@@ -128,7 +128,7 @@ test("DDL - Array column generates TYPE[]", async () => {
 
   await db.createTables();
 
-  const sql = adapter.logs[0].sql;
+  const sql = adapter.logs[0]!.sql;
   assert.ok(sql.includes('"tags" TEXT[] NOT NULL'));
   assert.ok(sql.includes('"scores" INTEGER[] NOT NULL'));
 });
@@ -148,7 +148,7 @@ test("DDL - Mixed schema with all new types", async () => {
 
   await db.createTables();
 
-  const sql = adapter.logs[0].sql;
+  const sql = adapter.logs[0]!.sql;
   assert.ok(sql.includes('CREATE TABLE IF NOT EXISTS "events"'));
   assert.ok(sql.includes('"id" UUID NOT NULL'));
   assert.ok(sql.includes('"name" TEXT NOT NULL'));

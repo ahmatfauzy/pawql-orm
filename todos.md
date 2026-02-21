@@ -28,12 +28,12 @@
 
 ## 🔴 v0.3.0 — Query Essentials (Next Release)
 
-- [ ] **ORDER BY**: `.orderBy('column', 'ASC'|'DESC')` — required for meaningful LIMIT/OFFSET
-- [ ] **BETWEEN**: `.where({ age: { between: [18, 60] } })`
-- [ ] **`.first()`**: Return single row instead of array (`.limit(1)` + unwrap)
-- [ ] **`.count()`**: Shortcut for `SELECT COUNT(*) FROM table`
-- [ ] **Controllable RETURNING**: `.returning('id', 'name')` or `.returning(false)`
-- [ ] **Separate DummyAdapter**: Move test adapter out of production exports (`pawql/testing`)
+- [x] **ORDER BY**: `.orderBy('column', 'ASC'|'DESC')` — required for meaningful LIMIT/OFFSET
+- [x] **BETWEEN**: `.where({ age: { between: [18, 60] } })`
+- [x] **`.first()`**: Return single row instead of array (`.limit(1)` + unwrap)
+- [x] **`.count()`**: Shortcut for `SELECT COUNT(*) FROM table`
+- [x] **Controllable RETURNING**: `.returning('id', 'name')` or `.returning(false)`
+- [x] **Separate DummyAdapter**: Move test adapter out of production exports (`pawql/testing`)
 
 ---
 

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 
 test("DDL Generation - single table", async () => {
     const adapter = new DummyAdapter();
@@ -19,7 +19,7 @@ test("DDL Generation - single table", async () => {
 
     const logs = adapter.logs;
     assert.strictEqual(logs.length, 1);
-    const sql = logs[0].sql;
+    const sql = logs[0]!.sql;
     
     assert.ok(sql.includes('CREATE TABLE IF NOT EXISTS "users"'));
     assert.ok(sql.includes('"id" INTEGER PRIMARY KEY'));
@@ -40,6 +40,6 @@ test("DDL Generation - multiple tables", async () => {
 
     const logs = adapter.logs;
     assert.strictEqual(logs.length, 2);
-    assert.ok(logs[0].sql.includes('CREATE TABLE IF NOT EXISTS "users"'));
-    assert.ok(logs[1].sql.includes('CREATE TABLE IF NOT EXISTS "posts"'));
+    assert.ok(logs[0]!.sql.includes('CREATE TABLE IF NOT EXISTS "users"'));
+    assert.ok(logs[1]!.sql.includes('CREATE TABLE IF NOT EXISTS "posts"'));
 });

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 
 const schema = {
   users: {
@@ -36,7 +36,7 @@ test("Query Builder Tests - query builder generates correct SQL for select + whe
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     assert.strictEqual(lastLog.sql, 'SELECT "id", "name" FROM "users" WHERE "id" = $1');
     assert.strictEqual(lastLog.params[0], 1);
 });
@@ -50,7 +50,7 @@ test("Query Builder Tests - query builder generates correct SQL for insert", asy
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     // "INSERT INTO "users" ("id", "name", "email") VALUES ($1, $2, $3) RETURNING *"
     assert.ok(lastLog.sql.startsWith('INSERT INTO "users"'));
@@ -68,7 +68,7 @@ test("Query Builder Tests - query builder generates correct SQL for update", asy
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     // "UPDATE "users" SET "name" = $1 WHERE "id" = $2 RETURNING *"
     assert.ok(lastLog.sql.startsWith('UPDATE "users" SET "name" = $1'));
@@ -87,7 +87,7 @@ test("Query Builder Tests - query builder generates correct SQL for delete", asy
         .execute();
 
     const logs = adapter.logs;
-    const lastLog = logs[logs.length - 1];
+    const lastLog = logs[logs.length - 1]!;
     
     assert.strictEqual(lastLog.sql, 'DELETE FROM "users" WHERE "id" = $1 RETURNING *');
     assert.strictEqual(lastLog.params[0], 1);

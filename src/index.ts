@@ -3,7 +3,6 @@
 export * from "./core/database.js";
 export * from "./core/adapter.js";
 export * from "./adapters/pg.js";
-export * from "./adapters/dummy.js";
 
 // Query Builder
 export * from "./query/builder.js";

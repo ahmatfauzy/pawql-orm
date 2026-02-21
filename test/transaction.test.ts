@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert";
 import { createDB } from "../src/core/database.js";
-import { DummyAdapter } from "../src/adapters/dummy.js";
+import { DummyAdapter } from "../src/testing.js";
 
 test("Transaction - Commit Success", async () => {
     const adapter = new DummyAdapter();
@@ -14,11 +14,11 @@ test("Transaction - Commit Success", async () => {
     });
 
     const logs = adapter.logs;
-    assert.strictEqual(logs[0].sql, "BEGIN");
-    assert.ok(logs[1].sql.includes('INSERT INTO "users"'));
-    assert.deepStrictEqual(logs[1].params, [1, "Alice"]);
-    assert.ok(logs[2].sql.includes('INSERT INTO "users"'));
-    assert.strictEqual(logs[3].sql, "COMMIT");
+    assert.strictEqual(logs[0]!.sql, "BEGIN");
+    assert.ok(logs[1]!.sql.includes('INSERT INTO "users"'));
+    assert.deepStrictEqual(logs[1]!.params, [1, "Alice"]);
+    assert.ok(logs[2]!.sql.includes('INSERT INTO "users"'));
+    assert.strictEqual(logs[3]!.sql, "COMMIT");
     assert.strictEqual(logs.length, 4);
 });
 
@@ -36,9 +36,9 @@ test("Transaction - Rollback on Error", async () => {
     }
 
     const logs = adapter.logs;
-    assert.strictEqual(logs[0].sql, "BEGIN");
-    assert.ok(logs[1].sql.includes('INSERT INTO "users"'));
-    assert.strictEqual(logs[2].sql, "ROLLBACK"); // Must rollback
+    assert.strictEqual(logs[0]!.sql, "BEGIN");
+    assert.ok(logs[1]!.sql.includes('INSERT INTO "users"'));
+    assert.strictEqual(logs[2]!.sql, "ROLLBACK"); // Must rollback
     assert.strictEqual(logs.length, 3);
     
     // Verify that COMMIT was NOT called
