@@ -362,6 +362,164 @@ An array containing all executed queries.
 
 ---
 
+## `Migrator`
+
+The migration manager class. Import from `pawql` or `pawql/migration`.
+
+```typescript
+import { Migrator, PostgresAdapter } from 'pawql';
+
+const migrator = new Migrator(adapter, {
+  directory: './migrations',
+  tableName: 'pawql_migrations',
+});
+```
+
+### `migrator.up()`
+
+```typescript
+up(): Promise<string[]>
+```
+
+Run all pending migrations. Returns an array of applied migration names.
+
+### `migrator.down()`
+
+```typescript
+down(): Promise<string[]>
+```
+
+Rollback the last batch of migrations. Returns an array of rolled-back migration names.
+
+### `migrator.make(name)`
+
+```typescript
+make(name: string): string
+```
+
+Create a new migration file with a timestamp prefix. Returns the file path.
+
+### `migrator.getPending()`
+
+```typescript
+getPending(): Promise<string[]>
+```
+
+Get a list of migration names that haven't been applied yet.
+
+### `migrator.getExecuted()`
+
+```typescript
+getExecuted(): Promise<MigrationRecord[]>
+```
+
+Get all executed migration records from the tracking table.
+
+### `migrator.listMigrationFiles()`
+
+```typescript
+listMigrationFiles(): string[]
+```
+
+List all migration files in the configured directory (sorted, without extensions).
+
+---
+
+## `MigrationRunner`
+
+Passed to migration `up()` and `down()` functions. Provides DDL helpers.
+
+### `runner.createTable(tableName, columns)`
+
+```typescript
+createTable(tableName: string, columns: Record<string, any>): Promise<void>
+```
+
+Create a table using PawQL runtime schema types.
+
+### `runner.dropTable(tableName)`
+
+```typescript
+dropTable(tableName: string): Promise<void>
+```
+
+Drop a table with `CASCADE`.
+
+### `runner.addColumn(tableName, columnName, definition)`
+
+```typescript
+addColumn(tableName: string, columnName: string, definition: any): Promise<void>
+```
+
+Add a column to an existing table.
+
+### `runner.dropColumn(tableName, columnName)`
+
+```typescript
+dropColumn(tableName: string, columnName: string): Promise<void>
+```
+
+Remove a column from a table.
+
+### `runner.renameTable(oldName, newName)`
+
+```typescript
+renameTable(oldName: string, newName: string): Promise<void>
+```
+
+Rename a table.
+
+### `runner.renameColumn(tableName, oldName, newName)`
+
+```typescript
+renameColumn(tableName: string, oldName: string, newName: string): Promise<void>
+```
+
+Rename a column in a table.
+
+### `runner.sql(query, params?)`
+
+```typescript
+sql(query: string, params?: any[]): Promise<void>
+```
+
+Execute a raw SQL statement.
+
+---
+
+## `MigrationConfig`
+
+```typescript
+interface MigrationConfig {
+  directory?: string;   // Default: './migrations'
+  tableName?: string;   // Default: 'pawql_migrations'
+}
+```
+
+## `MigrationRecord`
+
+```typescript
+interface MigrationRecord {
+  id: number;
+  name: string;
+  batch: number;
+  executed_at: Date;
+}
+```
+
+## `Migration`
+
+The interface for migration files:
+
+```typescript
+interface Migration {
+  up(runner: MigrationRunner): Promise<void>;
+  down(runner: MigrationRunner): Promise<void>;
+}
+```
+
+---
+
 ## Schema Types
 
 ### Helpers

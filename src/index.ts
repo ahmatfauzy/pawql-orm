@@ -19,3 +19,7 @@ export { json, uuid, enumType, arrayType } from "./types/schema.js";
 // Types
 export * from "./types/schema.js";
 
+// Migration
+export { Migrator, createMigrationRunner } from "./migration/index.js";
+export type { Migration, MigrationRunner, MigrationConfig, MigrationRecord } from "./migration/types.js";
+

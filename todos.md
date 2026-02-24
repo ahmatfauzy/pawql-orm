@@ -39,7 +39,7 @@
 
 ## 🟡 v0.5.0 — Production Readiness
 
-- [ ] **Migrations (CLI)**: `pawql migrate:make`, `migrate:up`, `migrate:down`
+- [x] **Migrations (CLI)**: `pawql migrate:make`, `migrate:up`, `migrate:down`
 - [ ] **`.raw(sql, params)`**: Escape hatch for custom SQL queries
 - [ ] **ON CONFLICT / Upsert**: PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`
 - [ ] **GROUP BY + HAVING**: Aggregation query support

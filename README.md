@@ -5,6 +5,7 @@
 PawQL is a modern, type-safe database query builder that infers types directly from your runtime schema definition. No CLI tools, no `.prisma` files, no generated code.
 
 [![npm version](https://img.shields.io/npm/v/pawql)](https://www.npmjs.com/package/pawql)
+![npm downloads](https://img.shields.io/npm/dw/pawql)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why PawQL?
@@ -38,6 +39,10 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **DDL**: Auto-generate tables from schema with `db.createTables()`
 - **Controllable RETURNING**: Choose which columns to return from mutations
 - **Shortcuts**: `.first()` for single row, `.count()` for counting
+
+
+### v0.5.0 (updated - done)
+- **Migrations**: `migrate:make`, `migrate:up`, `migrate:down` — runtime schema, no generated code
 
 ## When Should You Use PawQL?
 
@@ -123,6 +128,43 @@ const db = createDB({
 }, adapter);
 ```
 
+## Migrations
+
+PawQL includes a migration system that stays true to its runtime-first philosophy — **no code generation**, just plain TypeScript migration files using the same schema types you already know.
+
+```bash
+# Create a new migration file
+npx pawql migrate:make create_users
+
+# Run all pending migrations
+npx pawql migrate:up
+
+# Rollback the last batch
+npx pawql migrate:down
+```
+
+Migration files use PawQL's runtime schema types:
+
+```typescript
+import type { MigrationRunner } from 'pawql';
+
+export default {
+  async up(runner: MigrationRunner) {
+    await runner.createTable('users', {
+      id: { type: Number, primaryKey: true },
+      name: String,
+      email: { type: String, nullable: true },
+    });
+  },
+
+  async down(runner: MigrationRunner) {
+    await runner.dropTable('users');
+  },
+};
+```
+
+See **[Migrations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** for full details.
+
 ## Documentation
 
 For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawql-orm/tree/main/docs)** directory:
@@ -132,6 +174,7 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Querying](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/querying.md)** — SELECT, WHERE, ORDER BY, LIMIT, joins
 - **[Mutations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/mutations.md)** — INSERT, UPDATE, DELETE, RETURNING
 - **[Transactions](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/transactions.md)** — Atomic operations
+- **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations with CLI
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for testing
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing
 

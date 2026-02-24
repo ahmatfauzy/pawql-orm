@@ -6,6 +6,9 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "pawql": "./dist/cli/index.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -14,10 +17,15 @@
     "./testing": {
       "import": "./dist/testing.js",
       "types": "./dist/testing.d.ts"
+    },
+    "./migration": {
+      "import": "./dist/migration/index.js",
+      "types": "./dist/migration/index.d.ts"
     }
   },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
