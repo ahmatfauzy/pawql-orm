@@ -294,6 +294,34 @@ ORDER BY "users"."name" ASC, "posts"."title" DESC
 LIMIT 50 OFFSET 0
 ```
 
+## Raw SQL — Escape Hatch
+
+When the query builder doesn't cover your use case, use `db.raw()` to execute any SQL directly:
+
+```typescript
+// Custom query with parameters
+const result = await db.raw<{ id: number; name: string }>(
+  'SELECT * FROM users WHERE age > $1 ORDER BY name',
+  [18]
+);
+console.log(result.rows);     // [{ id: 1, name: 'Alice' }, ...]
+console.log(result.rowCount); // number of rows
+
+// DDL operations (indexes, etc.)
+await db.raw('CREATE INDEX idx_users_email ON users(email)');
+
+// Complex queries not supported by the builder
+await db.raw(`
+  SELECT u.name, COUNT(p.id) AS post_count
+  FROM users u
+  LEFT JOIN posts p ON u.id = p.user_id
+  GROUP BY u.name
+  HAVING COUNT(p.id) > $1
+`, [5]);
+```
+
+> `db.raw()` also works inside transactions via `tx.raw()`.
+
 ## Next Steps
 
 - [Mutations](./mutations.md) — INSERT, UPDATE, DELETE

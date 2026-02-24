@@ -34,6 +34,25 @@ export class Database<TSchema extends DatabaseSchema> {
     await this._adapter.close();
   }
 
+  /**
+   * Execute a raw SQL query with parameterized values.
+   * Escape hatch for custom SQL that the query builder doesn't support.
+   *
+   * @param sql The SQL string (use $1, $2, etc. for parameters)
+   * @param params Parameter values matching the placeholders
+   * @returns The query result with rows and rowCount
+   *
+   * @example
+   * const result = await db.raw<{ id: number; name: string }>(
+   *   'SELECT * FROM users WHERE id = $1',
+   *   [1]
+   * );
+   * console.log(result.rows); // [{ id: 1, name: 'Alice' }]
+   */
+  async raw<T = any>(sql: string, params?: any[]): Promise<import("./adapter.js").QueryResult<T>> {
+    return this._adapter.query<T>(sql, params);
+  }
+
   // Helper to quote identifiers
   private _quote(identifier: string): string {
     if (identifier.startsWith('"')) return identifier;

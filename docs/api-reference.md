@@ -72,6 +72,43 @@ Close the database connection.
 close(): Promise<void>
 ```
 
+### `db.raw(sql, params?)`
+
+Execute a raw SQL query with parameterized values. This is the escape hatch for custom SQL that the query builder doesn't support.
+
+```typescript
+raw<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>
+```
+
+**Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sql` | `string` | SQL query string (use `$1`, `$2`, etc. for params) |
+| `params` | `any[]` | Optional parameter values |
+
+**Returns:** `QueryResult<T>` with `rows: T[]` and `rowCount: number`
+
+**Examples:**
+```typescript
+// Simple query
+const result = await db.raw<{ now: Date }>('SELECT NOW() AS now');
+
+// With parameters
+const users = await db.raw<{ id: number; name: string }>(
+  'SELECT * FROM users WHERE age > $1 ORDER BY name',
+  [18]
+);
+console.log(users.rows);
+
+// DDL operations
+await db.raw('CREATE INDEX idx_users_email ON users(email)');
+
+// Works inside transactions
+await db.transaction(async (tx) => {
+  await tx.raw('INSERT INTO logs (message) VALUES ($1)', ['action performed']);
+});
+```
+
 ### `db.schema`
 
 Access the defined schema.

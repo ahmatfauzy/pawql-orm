@@ -42,8 +42,9 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **Shortcuts**: `.first()` for single row, `.count()` for counting
 
 
-### v0.5.0 (updated - done)
-- **Migrations**: `migrate:make`, `migrate:up`, `migrate:down` — runtime schema, no generated code
+### Next v0.5.0 (updated - progress)
+- **Migrations**: `migrate:make`, `migrate:up`, `migrate:down` 
+- **Raw SQL**: `db.raw(sql, params)` — escape hatch for custom queries
 
 ## When Should You Use PawQL?
 
