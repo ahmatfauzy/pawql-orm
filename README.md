@@ -6,6 +6,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 
 [![npm version](https://img.shields.io/npm/v/pawql)](https://www.npmjs.com/package/pawql)
 ![npm downloads](https://img.shields.io/npm/dw/pawql)
+[![CI](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why PawQL?
