@@ -132,12 +132,16 @@ export const schema = {
 ### `src/db/connection.ts`
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
+import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
 import { schema } from './schema.js';
 
 export const db = createDB(schema, new PostgresAdapter({
   connectionString: process.env.DATABASE_URL!,
-}));
+  max: 20,                    // Max pool connections
+  idleTimeoutMillis: 30000,   // Close idle clients after 30s
+}), {
+  logger: consoleLogger,      // Optional: log all SQL to console
+});
 ```
 
 ## Next Steps

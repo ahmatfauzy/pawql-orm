@@ -40,13 +40,13 @@
 ## 🟡 v0.5.0 — Production Readiness
 
 - [x] **Migrations (CLI)**: `pawql migrate:make`, `migrate:up`, `migrate:down`
-- [ ] **`.raw(sql, params)`**: Escape hatch for custom SQL queries
-- [ ] **ON CONFLICT / Upsert**: PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`
-- [ ] **GROUP BY + HAVING**: Aggregation query support
-- [ ] **Subqueries**: Support subqueries in WHERE/FROM
-- [ ] **Logger / Debug Mode**: Built-in query logger to inspect generated SQL
-- [ ] **Pool Management**: Expose connection pooling options in Adapter config
-- [ ] **JSDoc comments**: Complete documentation for all public APIs
+- [x] **`.raw(sql, params)`**: Escape hatch for custom SQL queries
+- [x] **ON CONFLICT / Upsert**: PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`
+- [x] **GROUP BY + HAVING**: Aggregation query support
+- [x] **Subqueries**: Support subqueries in WHERE/FROM
+- [x] **Logger / Debug Mode**: Built-in query logger to inspect generated SQL
+- [x] **Pool Management**: Expose connection pooling options in Adapter config
+- [x] **JSDoc comments**: Complete documentation for all public APIs
 
 ---
 

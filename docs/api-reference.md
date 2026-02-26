@@ -11,7 +11,8 @@ Factory function to create a new database instance.
 ```typescript
 function createDB<TSchema extends DatabaseSchema>(
   schema: TSchema,
-  adapter: DatabaseAdapter
+  adapter: DatabaseAdapter,
+  options?: DatabaseOptions
 ): Database<TSchema>
 ```
 
@@ -20,16 +21,19 @@ function createDB<TSchema extends DatabaseSchema>(
 |-----------|------|-------------|
 | `schema` | `DatabaseSchema` | Schema definition (table objects) |
 | `adapter` | `DatabaseAdapter` | Database adapter (PostgresAdapter, DummyAdapter) |
+| `options` | `DatabaseOptions` | Optional config (logger, etc.) |
 
 **Returns:** `Database<TSchema>`
 
 **Example:**
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
+import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
 
 const db = createDB({
   users: { id: Number, name: String }
-}, new PostgresAdapter({ connectionString: '...' }));
+}, new PostgresAdapter({ connectionString: '...' }), {
+  logger: consoleLogger,  // Optional: log all SQL queries
+});
 ```
 
 ---
@@ -70,6 +74,43 @@ Close the database connection.
 
 ```typescript
 close(): Promise<void>
+```
+
+### `db.raw(sql, params?)`
+
+Execute a raw SQL query with parameterized values. This is the escape hatch for custom SQL that the query builder doesn't support.
+
+```typescript
+raw<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>>
+```
+
+**Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sql` | `string` | SQL query string (use `$1`, `$2`, etc. for params) |
+| `params` | `any[]` | Optional parameter values |
+
+**Returns:** `QueryResult<T>` with `rows: T[]` and `rowCount: number`
+
+**Examples:**
+```typescript
+// Simple query
+const result = await db.raw<{ now: Date }>('SELECT NOW() AS now');
+
+// With parameters
+const users = await db.raw<{ id: number; name: string }>(
+  'SELECT * FROM users WHERE age > $1 ORDER BY name',
+  [18]
+);
+console.log(users.rows);
+
+// DDL operations
+await db.raw('CREATE INDEX idx_users_email ON users(email)');
+
+// Works inside transactions
+await db.transaction(async (tx) => {
+  await tx.raw('INSERT INTO logs (message) VALUES ($1)', ['action performed']);
+});
 ```
 
 ### `db.schema`
@@ -253,6 +294,93 @@ db.query('users').insert({ ... }).returning('id', 'name')
 
 // Disable
 db.query('users').insert({ ... }).returning(false)
+```
+
+### Aggregation
+
+#### `.groupBy(...columns)`
+
+```typescript
+groupBy(...columns: string[]): this
+```
+
+Group results by one or more columns.
+
+#### `.having(condition, ...params)`
+
+```typescript
+having(condition: string, ...params: any[]): this
+```
+
+Filter groups after aggregation. Use `$1`, `$2`, etc. for parameterized values. Can be chained multiple times (combined with AND).
+
+```typescript
+db.query('orders')
+  .select('userId')
+  .groupBy('userId')
+  .having('COUNT(*) > $1', 5)
+  .having('SUM(total) > $1', 1000)
+```
+
+### Upsert (ON CONFLICT)
+
+#### `.onConflict(...columns)`
+
+```typescript
+onConflict(...columns: string[]): {
+  doUpdate: (data: Partial<TTable>) => QueryBuilder;
+  doNothing: () => QueryBuilder;
+}
+```
+
+Specify conflict columns for upsert. Chain with `.doUpdate(data)` or `.doNothing()`.
+
+```typescript
+// Skip duplicates
+db.query('users')
+  .insert({ id: 1, name: 'Alice' })
+  .onConflict('id').doNothing()
+
+// Update on conflict
+db.query('users')
+  .insert({ id: 1, name: 'Alice' })
+  .onConflict('id').doUpdate({ name: 'Alice Updated' })
+```
+
+### Subqueries
+
+#### `subquery(builder)`
+
+```typescript
+import { subquery } from 'pawql';
+
+subquery(builder): SubqueryDef & { as(alias: string): SubqueryDef }
+```
+
+Create a subquery from a query builder. Use `.as(alias)` for FROM subqueries.
+
+#### `.from(subquery)`
+
+```typescript
+from(sub: SubqueryDef): this
+```
+
+Use a subquery as the FROM source.
+
+```typescript
+const sub = db.query('orders').where({ total: { gt: 100 } });
+db.query('orders')
+  .select('userId')
+  .from(subquery(sub).as('expensive'))
+```
+
+#### Subquery in WHERE
+
+```typescript
+const orderUserIds = db.query('orders').select('userId');
+db.query('users')
+  .where({ id: { subquery: subquery(orderUserIds) } })
+// → WHERE "id" IN (SELECT "userId" FROM "orders")
 ```
 
 ### Execution
@@ -563,4 +691,107 @@ interface QueryResult<T> {
   rows: T[];
   rowCount: number;
 }
+```
+
+---
+
+## Logger / Debug Mode
+
+PawQL includes a pluggable logging system to inspect all generated SQL queries.
+
+### `PawQLLogger` Interface
+
+```typescript
+interface PawQLLogger {
+  query(sql: string, params: any[] | undefined, durationMs: number): void;
+}
+```
+
+### `consoleLogger`
+
+Built-in logger with colored terminal output. Shows query time, SQL, and parameters.
+
+```typescript
+import { createDB, consoleLogger } from 'pawql';
+
+const db = createDB(schema, adapter, { logger: consoleLogger });
+// Output: [0.3ms] SELECT * FROM "users" WHERE "id" = $1 [1]
+```
+
+### `silentLogger`
+
+A no-op logger that discards all output. Useful for disabling logging in production.
+
+```typescript
+import { silentLogger } from 'pawql';
+const db = createDB(schema, adapter, { logger: silentLogger });
+```
+
+### Custom Logger
+
+```typescript
+const db = createDB(schema, adapter, {
+  logger: {
+    query(sql, params, durationMs) {
+      // Send to your logging service
+      myLogger.info({ sql, params, durationMs });
+    }
+  }
+});
+```
+
+### `DatabaseOptions`
+
+```typescript
+interface DatabaseOptions {
+  logger?: PawQLLogger;  // Optional query logger
+}
+```
+
+---
+
+## Pool Management
+
+### `PawQLPoolConfig`
+
+Extends `pg.PoolConfig` with documented pool options:
+
+```typescript
+interface PawQLPoolConfig extends PoolConfig {
+  max?: number;                    // Max pool size (default: 10)
+  idleTimeoutMillis?: number;      // Idle timeout (default: 10000ms)
+  connectionTimeoutMillis?: number; // Connection timeout (default: 0)
+  statement_timeout?: number;      // Query timeout
+  allowExitOnIdle?: boolean;       // Allow exceeding max (default: false)
+}
+```
+
+### `PostgresAdapter` Constructor
+
+```typescript
+new PostgresAdapter(config: PawQLPoolConfig)   // Create new pool
+new PostgresAdapter(pool: Pool)                // Use existing pool
+new PostgresAdapter(client: PoolClient)        // Transaction client
+```
+
+### Pool Statistics
+
+```typescript
+const adapter = new PostgresAdapter({ connectionString: '...', max: 20 });
+
+adapter.poolSize      // Total clients in the pool
+adapter.idleCount     // Idle clients
+adapter.waitingCount  // Clients waiting for a connection
+```
+
+**Example:**
+```typescript
+import { PostgresAdapter } from 'pawql';
+
+const adapter = new PostgresAdapter({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
 ```
