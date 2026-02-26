@@ -28,7 +28,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - ⚡ **Lightweight Core** — Minimal abstraction, ideal for serverless & edge
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 
-### Capabilities (v0.3.0)
+### Capabilities (v0.5.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -40,9 +40,6 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **DDL**: Auto-generate tables from schema with `db.createTables()`
 - **Controllable RETURNING**: Choose which columns to return from mutations
 - **Shortcuts**: `.first()` for single row, `.count()` for counting
-
-
-### Next v0.5.0 (updated - progress)
 - **Migrations**: `migrate:make`, `migrate:up`, `migrate:down` 
 - **Raw SQL**: `db.raw(sql, params)` — escape hatch for custom queries
 - **Upsert**: `INSERT ... ON CONFLICT DO UPDATE / DO NOTHING`
