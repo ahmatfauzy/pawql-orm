@@ -1,34 +1,91 @@
 
-import { DatabaseAdapter } from "./adapter.js";
+import { DatabaseAdapter, QueryResult } from "./adapter.js";
 import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema.js";
 import { QueryBuilder } from "../query/builder.js";
+import { PawQLLogger } from "./logger.js";
 
+/**
+ * Configuration options for creating a PawQL database instance.
+ */
+export interface DatabaseOptions {
+  /**
+   * Optional logger to inspect generated SQL queries.
+   * Use `consoleLogger` for colored output, or implement `PawQLLogger` for custom logging.
+   *
+   * @example
+   * ```typescript
+   * import { createDB, consoleLogger } from 'pawql';
+   * const db = createDB(schema, adapter, { logger: consoleLogger });
+   * ```
+   */
+  logger?: PawQLLogger;
+}
+
+/**
+ * The main PawQL database class.
+ * Provides type-safe query building, DDL generation, raw SQL execution,
+ * and transaction management — all driven by the runtime schema.
+ *
+ * @typeParam TSchema - The database schema object type
+ *
+ * @example
+ * ```typescript
+ * const db = createDB({
+ *   users: {
+ *     id: { type: Number, primaryKey: true },
+ *     name: String,
+ *   }
+ * }, adapter);
+ *
+ * const users = await db.query('users').where({ name: 'Alice' }).execute();
+ * ```
+ */
 export class Database<TSchema extends DatabaseSchema> {
   private _schema: TSchema;
   private _adapter: DatabaseAdapter;
+  private _logger?: PawQLLogger;
 
-  constructor(schema: TSchema, adapter: DatabaseAdapter) {
+  constructor(schema: TSchema, adapter: DatabaseAdapter, options?: DatabaseOptions) {
     this._schema = schema;
-    this._adapter = adapter;
+    this._adapter = options?.logger ? this._wrapAdapter(adapter, options.logger) : adapter;
+    this._logger = options?.logger;
   }
 
   /**
-   * Start a query on a specific table.
+   * Start a type-safe query on a specific table.
+   *
+   * @typeParam K - The table name (inferred from schema keys)
+   * @param tableName - The name of the table to query
+   * @returns A new {@link QueryBuilder} scoped to the specified table
+   *
+   * @example
+   * ```typescript
+   * const users = await db.query('users')
+   *   .select('id', 'name')
+   *   .where({ isActive: true })
+   *   .execute();
+   * ```
    */
   query<K extends keyof TSchema & string>(tableName: K): QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema> {
-    // In a real implementation, we would validate that the table exists in the schema.
     return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(tableName, this._adapter);
   }
 
   /**
-   * Access the raw schema definition.
+   * Access the raw runtime schema definition.
+   *
+   * @returns The schema object passed to `createDB()`
    */
   get schema(): TSchema {
     return this._schema;
   }
 
   /**
-   * Close the database connection.
+   * Close the database connection and release resources.
+   *
+   * @example
+   * ```typescript
+   * await db.close();
+   * ```
    */
   async close(): Promise<void> {
     await this._adapter.close();
@@ -38,31 +95,64 @@ export class Database<TSchema extends DatabaseSchema> {
    * Execute a raw SQL query with parameterized values.
    * Escape hatch for custom SQL that the query builder doesn't support.
    *
-   * @param sql The SQL string (use $1, $2, etc. for parameters)
-   * @param params Parameter values matching the placeholders
-   * @returns The query result with rows and rowCount
+   * @typeParam T - The expected row type
+   * @param sql - The SQL string (use `$1`, `$2`, etc. for parameters)
+   * @param params - Parameter values matching the placeholders
+   * @returns The query result with `rows` and `rowCount`
    *
    * @example
+   * ```typescript
    * const result = await db.raw<{ id: number; name: string }>(
    *   'SELECT * FROM users WHERE id = $1',
    *   [1]
    * );
    * console.log(result.rows); // [{ id: 1, name: 'Alice' }]
+   * ```
    */
-  async raw<T = any>(sql: string, params?: any[]): Promise<import("./adapter.js").QueryResult<T>> {
+  async raw<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
     return this._adapter.query<T>(sql, params);
   }
 
-  // Helper to quote identifiers
+  /**
+   * Wrap an adapter to add logging around every query call.
+   * @internal
+   */
+  private _wrapAdapter(adapter: DatabaseAdapter, logger: PawQLLogger): DatabaseAdapter {
+    return {
+      async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+        const start = performance.now();
+        const result = await adapter.query<T>(sql, params);
+        const durationMs = performance.now() - start;
+        logger.query(sql, params, durationMs);
+        return result;
+      },
+      async transaction<T>(callback: (trx: DatabaseAdapter) => Promise<T>): Promise<T> {
+        return adapter.transaction(callback);
+      },
+      async close(): Promise<void> {
+        return adapter.close();
+      },
+    };
+  }
+
+  /**
+   * Quote a SQL identifier (table or column name).
+   * @internal
+   */
   private _quote(identifier: string): string {
     if (identifier.startsWith('"')) return identifier;
     return `"${identifier}"`;
   }
 
   /**
-    * Synchronize schema with database (DDL).
-    * Creates tables if they don't exist.
-    */
+   * Synchronize schema with database by creating tables if they don't exist.
+   * Generates `CREATE TABLE IF NOT EXISTS` DDL for each table in the schema.
+   *
+   * @example
+   * ```typescript
+   * await db.createTables();
+   * ```
+   */
   async createTables(): Promise<void> {
     for (const [tableName, tableSchema] of Object.entries(this._schema)) {
       const columns: string[] = [];
@@ -145,8 +235,21 @@ export class Database<TSchema extends DatabaseSchema> {
   }
 
   /**
-   * Run a callback within a transaction.
-   * The callback receives a new Database instance scoped to the transaction.
+   * Run a callback within a database transaction.
+   * The callback receives a new `Database` instance scoped to the transaction.
+   * If the callback throws, the transaction is automatically rolled back.
+   *
+   * @typeParam T - The return type of the callback
+   * @param callback - Function to execute within the transaction scope
+   * @returns The value returned by the callback
+   *
+   * @example
+   * ```typescript
+   * await db.transaction(async (tx) => {
+   *   await tx.query('users').insert({ id: 1, name: 'Alice' }).execute();
+   *   await tx.query('posts').insert({ id: 1, userId: 1, title: 'Hello' }).execute();
+   * });
+   * ```
    */
   async transaction<T>(callback: (tx: Database<TSchema>) => Promise<T>): Promise<T> {
     return this._adapter.transaction(async (trxAdapter: DatabaseAdapter) => {
@@ -158,12 +261,32 @@ export class Database<TSchema extends DatabaseSchema> {
 }
 
 /**
- * Factory function to create a new database instance.
+ * Factory function to create a new PawQL database instance.
+ *
+ * @typeParam TSchema - The database schema type (inferred from the schema object)
+ * @param schema - The runtime schema definition object
+ * @param adapter - The database adapter (e.g. `PostgresAdapter`, `DummyAdapter`)
+ * @param options - Optional configuration (logger, etc.)
+ * @returns A fully typed {@link Database} instance
+ *
+ * @example
+ * ```typescript
+ * import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
+ *
+ * const db = createDB({
+ *   users: {
+ *     id: { type: Number, primaryKey: true },
+ *     name: String,
+ *   }
+ * }, new PostgresAdapter({ connectionString: process.env.DATABASE_URL }), {
+ *   logger: consoleLogger,
+ * });
+ * ```
  */
 export function createDB<TSchema extends DatabaseSchema>(
   schema: TSchema,
-  adapter: DatabaseAdapter
+  adapter: DatabaseAdapter,
+  options?: DatabaseOptions
 ): Database<TSchema> {
-  return new Database(schema, adapter);
+  return new Database(schema, adapter, options);
 }
-

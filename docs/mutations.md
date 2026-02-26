@@ -167,27 +167,64 @@ const [result] = await db.query('users')
 console.log(`Created user with ID: ${result.id}`);
 ```
 
-## Pattern: Manual Upsert
+## Upsert (ON CONFLICT)
 
-PawQL doesn't have a built-in upsert yet, but you can use a transaction:
+PawQL supports PostgreSQL's `INSERT ... ON CONFLICT` for upsert operations.
+
+### DO NOTHING — Skip on Conflict
 
 ```typescript
-await db.transaction(async (tx) => {
-  const existing = await tx.query('users')
-    .where({ email: 'alice@example.com' })
-    .first();
+await db.query('users')
+  .insert({ id: 1, name: 'Alice', email: 'alice@example.com' })
+  .onConflict('id')
+  .doNothing()
+  .returning(false)
+  .execute();
+```
 
-  if (existing) {
-    await tx.query('users')
-      .update({ name: 'Alice Updated' })
-      .where({ id: existing.id })
-      .execute();
-  } else {
-    await tx.query('users')
-      .insert({ name: 'Alice', email: 'alice@example.com' })
-      .execute();
-  }
-});
+**Generated SQL:**
+```sql
+INSERT INTO "users" ("id", "name", "email") VALUES ($1, $2, $3) 
+ON CONFLICT ("id") DO NOTHING
+```
+
+### DO UPDATE — Update on Conflict
+
+```typescript
+await db.query('users')
+  .insert({ id: 1, name: 'Alice', email: 'alice@example.com' })
+  .onConflict('id')
+  .doUpdate({ name: 'Alice Updated', email: 'new@example.com' })
+  .execute();
+```
+
+**Generated SQL:**
+```sql
+INSERT INTO "users" ("id", "name", "email") VALUES ($1, $2, $3) 
+ON CONFLICT ("id") DO UPDATE SET "name" = $4, "email" = $5 RETURNING *
+```
+
+### Multiple Conflict Columns
+
+```typescript
+await db.query('users')
+  .insert({ id: 1, name: 'Alice', email: 'alice@example.com' })
+  .onConflict('id', 'email')
+  .doUpdate({ name: 'Alice Updated' })
+  .execute();
+// → ON CONFLICT ("id", "email") DO UPDATE SET "name" = ...
+```
+
+### With Controllable RETURNING
+
+```typescript
+const result = await db.query('users')
+  .insert({ id: 1, name: 'Alice', email: 'alice@example.com' })
+  .onConflict('id')
+  .doUpdate({ name: 'Alice Updated' })
+  .returning('id', 'name')
+  .execute();
+// Returns only id and name from the upserted row
 ```
 
 ## Next Steps

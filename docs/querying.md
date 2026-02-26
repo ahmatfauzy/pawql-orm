@@ -294,6 +294,96 @@ ORDER BY "users"."name" ASC, "posts"."title" DESC
 LIMIT 50 OFFSET 0
 ```
 
+## GROUP BY
+
+Group rows by one or more columns, typically used with aggregate functions.
+
+```typescript
+// Count orders per user
+const orderCounts = await db.query('orders')
+  .select('userId')
+  .groupBy('userId')
+  .execute();
+// → SELECT "userId" FROM "orders" GROUP BY "userId"
+
+// Multiple group columns
+const statusByUser = await db.query('orders')
+  .select('userId', 'status')
+  .groupBy('userId', 'status')
+  .execute();
+// → SELECT "userId", "status" FROM "orders" GROUP BY "userId", "status"
+```
+
+### HAVING
+
+Filter groups after aggregation. Use `$1`, `$2`, etc. for parameterized values.
+
+```typescript
+// Users with more than 5 orders
+const frequentBuyers = await db.query('orders')
+  .select('userId')
+  .groupBy('userId')
+  .having('COUNT(*) > $1', 5)
+  .execute();
+// → SELECT "userId" FROM "orders" GROUP BY "userId" HAVING COUNT(*) > $1
+
+// Combine WHERE + GROUP BY + HAVING
+const bigSpenders = await db.query('orders')
+  .select('userId')
+  .where({ status: 'completed' })
+  .groupBy('userId')
+  .having('SUM(total) > $1', 1000)
+  .execute();
+// → WHERE "status" = $1 GROUP BY "userId" HAVING SUM(total) > $2
+
+// Multiple HAVING conditions (combined with AND)
+const topUsers = await db.query('orders')
+  .select('userId')
+  .groupBy('userId')
+  .having('COUNT(*) > $1', 2)
+  .having('SUM(total) > $1', 500)
+  .execute();
+// → HAVING COUNT(*) > $1 AND SUM(total) > $2
+```
+
+## Subqueries
+
+PawQL supports subqueries in both WHERE and FROM clauses via the `subquery()` helper.
+
+```typescript
+import { subquery } from 'pawql';
+```
+
+### Subquery in WHERE (IN)
+
+```typescript
+// Find users who have completed orders
+const completedOrderUserIds = db.query('orders')
+  .select('userId')
+  .where({ status: 'completed' });
+
+const users = await db.query('users')
+  .where({ id: { subquery: subquery(completedOrderUserIds) } })
+  .execute();
+// → SELECT * FROM "users" WHERE "id" IN (SELECT "userId" FROM "orders" WHERE "status" = $1)
+```
+
+### Subquery in FROM
+
+```typescript
+// Query from a derived table
+const expensiveOrders = db.query('orders')
+  .where({ total: { gt: 500 } });
+
+const result = await db.query('orders')
+  .select('userId')
+  .from(subquery(expensiveOrders).as('expensive'))
+  .execute();
+// → SELECT "userId" FROM (SELECT * FROM "orders" WHERE "total" > $1) AS "expensive"
+```
+
+> Parameters from inner and outer queries are properly rebased — no conflicts.
+
 ## Raw SQL — Escape Hatch
 
 When the query builder doesn't cover your use case, use `db.raw()` to execute any SQL directly:
