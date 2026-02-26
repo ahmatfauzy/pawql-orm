@@ -174,14 +174,14 @@ See **[Migrations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/
 
 For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawql-orm/tree/main/docs)** directory:
 
-- **[Getting Started](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/getting-started.md)** — Installation, setup, first query
+- **[Getting Started](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/getting-started.md)** — Installation, setup, first query, logger & pool config
 - **[Schema Definition](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/schema.md)** — Defining tables, columns, and types
-- **[Querying](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/querying.md)** — SELECT, WHERE, ORDER BY, LIMIT, joins
-- **[Mutations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/mutations.md)** — INSERT, UPDATE, DELETE, RETURNING
+- **[Querying](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/querying.md)** — SELECT, WHERE, ORDER BY, joins, GROUP BY, HAVING, subqueries, raw SQL
+- **[Mutations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/mutations.md)** — INSERT, UPDATE, DELETE, RETURNING, upsert (ON CONFLICT)
 - **[Transactions](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/transactions.md)** — Atomic operations
 - **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations with CLI
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for testing
-- **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing
+- **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 
 ## Philosophy
 
