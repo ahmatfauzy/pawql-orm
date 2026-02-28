@@ -7,6 +7,7 @@ export * from "./adapters/pg.js";
 
 // Query Builder
 export * from "./query/builder.js";
+export type { SoftDeleteConfig } from "./query/builder.js";
 
 // Schema Helpers (Primitives)
 /** Alias for `Number` constructor — use as column type for INTEGER columns. */

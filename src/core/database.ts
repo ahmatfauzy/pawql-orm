@@ -1,7 +1,7 @@
 
 import { DatabaseAdapter, QueryResult } from "./adapter.js";
 import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema.js";
-import { QueryBuilder } from "../query/builder.js";
+import { QueryBuilder, SoftDeleteConfig } from "../query/builder.js";
 import { PawQLLogger } from "./logger.js";
 
 /**
@@ -19,6 +19,42 @@ export interface DatabaseOptions {
    * ```
    */
   logger?: PawQLLogger;
+
+  /**
+   * Soft delete configuration.
+   * When enabled, queries will automatically filter out rows where `deleted_at IS NOT NULL`.
+   *
+   * @example
+   * ```typescript
+   * const db = createDB(schema, adapter, {
+   *   softDelete: {
+   *     tables: ['users', 'posts'],    // Tables with soft delete enabled
+   *     column: 'deleted_at',           // Optional, default: 'deleted_at'
+   *   }
+   * });
+   *
+   * // Soft delete a user (sets deleted_at = NOW())
+   * await db.query('users').where({ id: 1 }).softDelete().execute();
+   *
+   * // Restore a soft-deleted user
+   * await db.query('users').where({ id: 1 }).restore().execute();
+   *
+   * // Include soft-deleted rows
+   * await db.query('users').withTrashed().execute();
+   *
+   * // Only soft-deleted rows
+   * await db.query('users').onlyTrashed().execute();
+   * ```
+   */
+  softDelete?: {
+    /** Array of table names that support soft delete. */
+    tables: string[];
+    /**
+     * Column name used for soft delete timestamps.
+     * @default 'deleted_at'
+     */
+    column?: string;
+  };
 }
 
 /**
@@ -44,11 +80,13 @@ export class Database<TSchema extends DatabaseSchema> {
   private _schema: TSchema;
   private _adapter: DatabaseAdapter;
   private _logger?: PawQLLogger;
+  private _options?: DatabaseOptions;
 
   constructor(schema: TSchema, adapter: DatabaseAdapter, options?: DatabaseOptions) {
     this._schema = schema;
     this._adapter = options?.logger ? this._wrapAdapter(adapter, options.logger) : adapter;
     this._logger = options?.logger;
+    this._options = options;
   }
 
   /**
@@ -67,7 +105,19 @@ export class Database<TSchema extends DatabaseSchema> {
    * ```
    */
   query<K extends keyof TSchema & string>(tableName: K): QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema> {
-    return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(tableName, this._adapter);
+    const softDeleteConfig = this._getSoftDeleteConfig(tableName);
+    return new QueryBuilder<InferTableType<TSchema[K]>, InferTableType<TSchema[K]>, TSchema>(tableName, this._adapter, softDeleteConfig);
+  }
+
+  /**
+   * Get the soft delete config for a specific table.
+   * @internal
+   */
+  private _getSoftDeleteConfig(tableName: string): SoftDeleteConfig | undefined {
+    if (!this._options?.softDelete) return undefined;
+    const { tables, column } = this._options.softDelete;
+    if (!tables.includes(tableName)) return undefined;
+    return { enabled: true, column: column || 'deleted_at' };
   }
 
   /**
@@ -254,7 +304,7 @@ export class Database<TSchema extends DatabaseSchema> {
   async transaction<T>(callback: (tx: Database<TSchema>) => Promise<T>): Promise<T> {
     return this._adapter.transaction(async (trxAdapter: DatabaseAdapter) => {
       // Create a lightweight copy of the DB class with the transaction adapter
-      const txDb = new Database(this._schema, trxAdapter);
+      const txDb = new Database(this._schema, trxAdapter, this._options);
       return callback(txDb);
     });
   }

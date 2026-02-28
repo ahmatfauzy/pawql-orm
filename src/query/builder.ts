@@ -96,9 +96,19 @@ export function subquery<T extends Record<string, any>>(builder: QueryBuilder<T,
 }
 
 /**
+ * Configuration for soft delete behavior on a query builder.
+ */
+export interface SoftDeleteConfig {
+  /** Whether soft delete is enabled for this table. */
+  enabled: boolean;
+  /** The column name used for soft delete timestamps. @default 'deleted_at' */
+  column: string;
+}
+
+/**
  * Fluent, type-safe SQL query builder.
  * Supports SELECT, INSERT, UPDATE, DELETE with filtering, joins, aggregation,
- * subqueries, upserts, and more.
+ * subqueries, upserts, soft delete, and more.
  *
  * @typeParam TTable - The table row type (inferred from schema)
  * @typeParam TResult - The result row type (may differ due to joins/select)
@@ -124,11 +134,15 @@ export class QueryBuilder<
   private _limit?: number;
   private _offset?: number;
   private _returning: boolean | string[] = false;
+  private _softDelete?: SoftDeleteConfig;
+  private _withTrashed: boolean = false;
+  private _onlyTrashed: boolean = false;
 
   /** @internal */
-  constructor(table: string, adapter: DatabaseAdapter) {
+  constructor(table: string, adapter: DatabaseAdapter, softDelete?: SoftDeleteConfig) {
     this._table = table;
     this._adapter = adapter;
+    this._softDelete = softDelete;
   }
 
   // --- CRUD Operations ---
@@ -185,6 +199,94 @@ export class QueryBuilder<
   delete(): this {
     this._operation = "DELETE";
     this._returning = true;
+    return this;
+  }
+
+  // --- Soft Delete ---
+
+  /**
+   * Perform a soft delete by setting the `deleted_at` column to the current timestamp.
+   * Only works when soft delete is enabled on the table.
+   * Equivalent to `UPDATE table SET deleted_at = NOW() WHERE ...`
+   *
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * await db.query('users').where({ id: 1 }).softDelete().execute();
+   * ```
+   */
+  softDelete(): this {
+    if (!this._softDelete?.enabled) {
+      throw new Error(
+        `Soft delete is not enabled for table "${this._table}". ` +
+        `Enable it via createDB(schema, adapter, { softDelete: { tables: ['${this._table}'] } })`
+      );
+    }
+    this._operation = "UPDATE";
+    const col = this._softDelete.column;
+    this._data = { [col]: new Date() } as any;
+    this._returning = true;
+    return this;
+  }
+
+  /**
+   * Restore soft-deleted rows by setting `deleted_at` to NULL.
+   * Only works when soft delete is enabled on the table.
+   *
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * await db.query('users').where({ id: 1 }).restore().execute();
+   * ```
+   */
+  restore(): this {
+    if (!this._softDelete?.enabled) {
+      throw new Error(
+        `Soft delete is not enabled for table "${this._table}". ` +
+        `Enable it via createDB(schema, adapter, { softDelete: { tables: ['${this._table}'] } })`
+      );
+    }
+    this._operation = "UPDATE";
+    const col = this._softDelete.column;
+    this._data = { [col]: null } as any;
+    this._returning = true;
+    // Automatically scope to trashed rows for restore
+    this._onlyTrashed = true;
+    return this;
+  }
+
+  /**
+   * Include soft-deleted rows in the query results.
+   * By default, soft-deleted rows are excluded from SELECT queries.
+   *
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const allUsers = await db.query('users').withTrashed().execute();
+   * ```
+   */
+  withTrashed(): this {
+    this._withTrashed = true;
+    this._onlyTrashed = false;
+    return this;
+  }
+
+  /**
+   * Only return soft-deleted rows (WHERE deleted_at IS NOT NULL).
+   *
+   * @returns The builder for chaining
+   *
+   * @example
+   * ```typescript
+   * const deletedUsers = await db.query('users').onlyTrashed().execute();
+   * ```
+   */
+  onlyTrashed(): this {
+    this._onlyTrashed = true;
+    this._withTrashed = false;
     return this;
   }
 
@@ -484,6 +586,7 @@ export class QueryBuilder<
     let sql = `SELECT COUNT(*) FROM ${tableUser}`;
     sql += this._buildJoins();
     sql += this._buildWhere(values);
+    sql += this._buildSoftDeleteWhere(values);
 
     this._select = savedSelect;
     this._operation = savedOperation;
@@ -647,6 +750,28 @@ export class QueryBuilder<
     return ` ON CONFLICT (${cols}) DO UPDATE SET ${setClauses.join(", ")}`;
   }
 
+  /**
+   * Build the soft delete WHERE condition.
+   * @internal
+   */
+  private _buildSoftDeleteWhere(values: any[]): string {
+    if (!this._softDelete?.enabled || this._withTrashed) return "";
+    
+    const col = this._quote(this._softDelete.column);
+    
+    if (this._onlyTrashed) {
+      // Only return soft-deleted rows
+      return this._where.length > 0
+        ? ` AND ${col} IS NOT NULL`
+        : ` WHERE ${col} IS NOT NULL`;
+    }
+    
+    // Default: exclude soft-deleted rows
+    return this._where.length > 0
+      ? ` AND ${col} IS NULL`
+      : ` WHERE ${col} IS NULL`;
+  }
+
   toSQL(): { sql: string; values: any[] } {
     const columns = this._select.length > 0
         ? this._select.map(c => this._quote(c)).join(", ")
@@ -669,6 +794,7 @@ export class QueryBuilder<
         }
         sql += this._buildJoins();
         sql += this._buildWhere(values);
+        sql += this._buildSoftDeleteWhere(values);
         sql += this._buildGroupBy();
         sql += this._buildHaving(values);
         sql += this._buildOrderBy();
@@ -723,6 +849,7 @@ export class QueryBuilder<
 
         sql = `UPDATE ${tableUser} SET ${setClauses.join(", ")}`;
         sql += this._buildWhere(values);
+        sql += this._buildSoftDeleteWhere(values);
         sql += this._buildReturning();
         break;
       }

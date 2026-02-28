@@ -28,7 +28,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - ⚡ **Lightweight Core** — Minimal abstraction, ideal for serverless & edge
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 
-### Capabilities (v0.5.0)
+### Capabilities (v0.6.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -48,6 +48,8 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **Logger / Debug Mode**: Built-in `consoleLogger` to inspect generated SQL
 - **Pool Management**: Exposed connection pool options (max, idle timeout, etc.)
 - **JSDoc**: Complete documentation for all public APIs
+- **Soft Delete**: Native `deleted_at` handling (`.softDelete()`, `.restore()`, `.withTrashed()`, `.onlyTrashed()`)
+- **Integration Tests**: Comprehensive tests with real PostgreSQL via Docker
 
 ## When Should You Use PawQL?
 
@@ -116,6 +118,36 @@ const total = await db.query('users')
   .count(); // Returns number
 ```
 
+## Soft Delete
+
+PawQL supports native soft delete — mark records as deleted instead of removing them:
+
+```typescript
+const db = createDB(schema, adapter, {
+  softDelete: {
+    tables: ['users', 'posts'],   // Enable for specific tables
+    column: 'deleted_at',          // Optional, default
+  },
+});
+
+// Soft delete (sets deleted_at = NOW())
+await db.query('users').where({ id: 1 }).softDelete().execute();
+
+// Default queries automatically exclude soft-deleted rows
+const users = await db.query('users').execute(); // Only non-deleted
+
+// Include soft-deleted rows
+const all = await db.query('users').withTrashed().execute();
+
+// Only soft-deleted rows
+const deleted = await db.query('users').onlyTrashed().execute();
+
+// Restore a soft-deleted row
+await db.query('users').where({ id: 1 }).restore().execute();
+```
+
+See **[Soft Delete Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** for full details.
+
 ## Advanced Types
 
 ```typescript
@@ -180,7 +212,8 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Mutations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/mutations.md)** — INSERT, UPDATE, DELETE, RETURNING, upsert (ON CONFLICT)
 - **[Transactions](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/transactions.md)** — Atomic operations
 - **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations with CLI
-- **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for testing
+- **[Soft Delete](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** — Soft delete with `.withTrashed()`, `.onlyTrashed()`
+- **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for unit tests + Docker integration tests
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 
 ## Philosophy

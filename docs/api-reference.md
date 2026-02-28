@@ -426,6 +426,60 @@ console.log(sql);    // SELECT * FROM "users" WHERE "id" = $1
 console.log(values); // [1]
 ```
 
+### Soft Delete
+
+#### `.softDelete()`
+
+```typescript
+softDelete(): this
+```
+
+Set the `deleted_at` column to the current timestamp (soft delete). Only works when soft delete is enabled.
+
+```typescript
+await db.query('users').where({ id: 1 }).softDelete().execute();
+// → UPDATE "users" SET "deleted_at" = $1 WHERE "id" = $2 AND "deleted_at" IS NULL
+```
+
+#### `.restore()`
+
+```typescript
+restore(): this
+```
+
+Set `deleted_at` to NULL to restore soft-deleted rows. Automatically scopes to trashed rows.
+
+```typescript
+await db.query('users').where({ id: 1 }).restore().execute();
+// → UPDATE "users" SET "deleted_at" = $1 WHERE "id" = $2 AND "deleted_at" IS NOT NULL
+```
+
+#### `.withTrashed()`
+
+```typescript
+withTrashed(): this
+```
+
+Include soft-deleted rows in query results. By default, soft-deleted rows are excluded.
+
+```typescript
+const allUsers = await db.query('users').withTrashed().execute();
+// → SELECT * FROM "users" (no deleted_at filter)
+```
+
+#### `.onlyTrashed()`
+
+```typescript
+onlyTrashed(): this
+```
+
+Only return soft-deleted rows.
+
+```typescript
+const deletedUsers = await db.query('users').onlyTrashed().execute();
+// → SELECT * FROM "users" WHERE "deleted_at" IS NOT NULL
+```
+
 ---
 
 ## `PostgresAdapter`
@@ -745,6 +799,10 @@ const db = createDB(schema, adapter, {
 ```typescript
 interface DatabaseOptions {
   logger?: PawQLLogger;  // Optional query logger
+  softDelete?: {
+    tables: string[];    // Tables with soft delete enabled
+    column?: string;     // Column name (default: 'deleted_at')
+  };
 }
 ```
 

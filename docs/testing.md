@@ -210,7 +210,79 @@ PawQL tests use the `node:test` module, which is compatible with:
 3. **Separation of concerns** — Production code vs test utilities
 4. **Industry standard** — Similar to `@angular/core/testing`, `react/test-utils`
 
+## Integration Tests (Docker)
+
+PawQL also includes comprehensive integration tests that run against a real PostgreSQL database via Docker. These tests verify every feature end-to-end.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose installed
+
+### Running Integration Tests
+
+```bash
+# 1. Start PostgreSQL container
+npm run test:docker:up
+
+# 2. Run integration tests
+npm run test:integration
+
+# 3. Stop the container when done
+npm run test:docker:down
+```
+
+### What's Tested
+
+The integration test suite covers:
+
+- **DDL**: Table creation, column types, constraints
+- **CRUD**: INSERT (single/batch), SELECT, UPDATE, DELETE
+- **Filtering**: All WHERE operators (gt, lt, gte, lte, in, notIn, like, ilike, between, null)
+- **ORDER BY**: ASC/DESC, multiple columns
+- **LIMIT / OFFSET**: Pagination
+- **JOINs**: INNER, LEFT, with filtering
+- **Transactions**: Commit, rollback, multiple operations
+- **GROUP BY + HAVING**: Aggregation queries
+- **Upsert**: ON CONFLICT DO NOTHING / DO UPDATE
+- **Raw SQL**: Direct SQL execution
+- **Soft Delete**: softDelete(), restore(), withTrashed(), onlyTrashed()
+- **Advanced Types**: JSONB, arrays, enums, booleans, nullable columns
+- **Pool Management**: Pool statistics
+
+### Docker Compose Configuration
+
+The test database uses port `5433` (not the default `5432`) to avoid conflicts with local PostgreSQL:
+
+```yaml
+# docker-compose.test.yml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pawql_test
+      POSTGRES_PASSWORD: pawql_test_pass
+      POSTGRES_DB: pawql_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data  # RAM-based for speed
+```
+
+### Available Scripts
+
+```json
+{
+  "test": "Unit tests only (no Docker needed)",
+  "test:unit": "Unit tests only",
+  "test:integration": "Integration tests (requires Docker)",
+  "test:all": "All tests (unit + integration)",
+  "test:docker:up": "Start test database",
+  "test:docker:down": "Stop test database"
+}
+```
+
 ## Next Steps
 
 - [Getting Started](./getting-started.md) — Initial setup
+- [Soft Delete](./soft-delete.md) — Soft delete guide
 - [API Reference](./api-reference.md) — Complete API reference

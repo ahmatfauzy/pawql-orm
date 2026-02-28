@@ -52,8 +52,8 @@
 
 ## 🟢 v1.0.0 — Stable Release
 
-- [ ] **Integration Tests**: Comprehensive tests with real PostgreSQL (via Docker)
-- [ ] **Soft Delete**: Native `deleted_at` handling (`.withTrashed()`, `.onlyTrashed()`)
+- [x] **Integration Tests**: Comprehensive tests with real PostgreSQL (via Docker)
+- [x] **Soft Delete**: Native `deleted_at` handling (`.withTrashed()`, `.onlyTrashed()`)
 - [ ] **Seeders**: Helper to populate initial data
 - [ ] **Parameter Validation**: Runtime check for input values against schema types
 - [ ] **Query Timeout**: Support canceling long-running queries
