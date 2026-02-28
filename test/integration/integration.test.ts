@@ -2,12 +2,13 @@
  * PawQL Integration Tests
  * 
  * These tests run against a real PostgreSQL database (via Docker).
+ * When PostgreSQL is not available, all tests are gracefully skipped.
  * 
  * Prerequisites:
  *   docker compose -f docker-compose.test.yml up -d
  * 
  * Run:
- *   npx tsx --test test/integration.test.ts
+ *   npx tsx --test test/integration/integration.test.ts
  * 
  * Cleanup:
  *   docker compose -f docker-compose.test.yml down
@@ -15,9 +16,9 @@
 
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert";
-import { createDB } from "../src/core/database.js";
-import { PostgresAdapter } from "../src/adapters/pg.js";
-import { uuid, json, enumType, arrayType } from "../src/types/schema.js";
+import { createDB } from "../../src/core/database.js";
+import { PostgresAdapter } from "../../src/adapters/pg.js";
+import { uuid, json, enumType, arrayType } from "../../src/types/schema.js";
 
 // ============================================
 // Test Configuration
@@ -60,7 +61,33 @@ const schema = {
 };
 
 // ============================================
-// Helper to create fresh DB instance
+// Connection check — skip all tests if no DB
+// ============================================
+
+let canConnect = false;
+
+try {
+  const testAdapter = new PostgresAdapter(TEST_CONNECTION);
+  await testAdapter.query("SELECT 1");
+  await testAdapter.close();
+  canConnect = true;
+} catch {
+  console.log("\n⏭️  Skipping integration tests — PostgreSQL is not running.");
+  console.log("   Start it with: docker compose -f docker-compose.test.yml up -d\n");
+}
+
+// ============================================
+// Guard — skip ALL tests if no DB available
+// ============================================
+
+const SKIP_REASON = "PostgreSQL not available (run: docker compose -f docker-compose.test.yml up -d)";
+
+if (!canConnect) {
+  test("Integration tests skipped — PostgreSQL not available", { skip: SKIP_REASON }, () => {});
+} else {
+
+// ============================================
+// Test Lifecycle
 // ============================================
 
 let adapter: PostgresAdapter;
@@ -83,22 +110,8 @@ async function seedUsers() {
   ]).returning(false).execute();
 }
 
-// ============================================
-// Test Lifecycle
-// ============================================
-
 before(async () => {
   adapter = new PostgresAdapter(TEST_CONNECTION);
-
-  // Verify connection
-  try {
-    await adapter.query("SELECT 1");
-  } catch (err) {
-    console.error("\n❌ PostgreSQL is not running.");
-    console.error("   Start it with: docker compose -f docker-compose.test.yml up -d\n");
-    process.exit(1);
-  }
-
   db = createDB(schema, adapter);
   dbSoftDelete = createDB(schema, adapter, {
     softDelete: { tables: ["users", "posts"] },
@@ -1110,3 +1123,5 @@ describe("Integration: Pool", () => {
     assert.ok(typeof adapter.waitingCount === "number");
   });
 });
+
+} // end if (canConnect)

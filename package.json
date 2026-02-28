@@ -32,12 +32,12 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
-    "test": "npx tsx --test test/*.test.ts --test-name-pattern='(?!Integration)'",
-    "test:unit": "npx tsx --test test/*.test.ts --test-name-pattern='(?!Integration)'",
-    "test:integration": "npx tsx --test test/integration.test.ts",
-    "test:all": "npx tsx --test test/*.test.ts",
+    "test": "npx tsx --test test/*.test.ts",
+    "test:unit": "npx tsx --test test/*.test.ts",
+    "test:integration": "npx tsx --test test/integration/*.test.ts",
+    "test:all": "npx tsx --test test/*.test.ts test/integration/*.test.ts",
     "test:watch": "npx tsx --test --watch test/*.test.ts",
-    "test:bun": "bun test",
+    "test:bun": "bun test test/*.test.ts",
     "test:docker:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:docker:down": "docker compose -f docker-compose.test.yml down"
   },

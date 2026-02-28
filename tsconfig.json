@@ -16,5 +16,5 @@
     "noImplicitOverride": true,
     "esModuleInterop": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "test/integration"]
 }
