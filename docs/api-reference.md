@@ -853,3 +853,170 @@ const adapter = new PostgresAdapter({
   connectionTimeoutMillis: 5000,
 });
 ```
+
+---
+
+## Parameter Validation
+
+PawQL includes built-in runtime validation for checking input data against schema types.
+
+### `validateRow(data, schema, options?)`
+
+Validate a single row against a table schema. Returns a result object (does not throw).
+
+```typescript
+import { validateRow } from 'pawql';
+
+function validateRow(
+  data: Record<string, unknown>,
+  tableSchema: TableSchema,
+  options?: ValidateOptions
+): ValidationResult
+```
+
+**Returns:** `ValidationResult`
+
+```typescript
+interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+}
+
+interface ValidationError {
+  column: string;       // Column name
+  message: string;      // Human-readable error
+  value: unknown;       // Provided value
+  expectedType: string; // Expected type name
+}
+```
+
+**Example:**
+```typescript
+const result = validateRow({ id: 'wrong', name: 123 }, schema.users);
+// result.valid === false
+// result.errors === [
+//   { column: 'id', message: 'Expected a number, got string', ... },
+//   { column: 'name', message: 'Expected a string, got number', ... },
+// ]
+```
+
+### `assertValid(data, schema, tableName, options?)`
+
+Validate and throw `PawQLValidationError` if any errors are found. Accepts a single row or array of rows.
+
+```typescript
+import { assertValid } from 'pawql';
+
+function assertValid(
+  data: Record<string, unknown> | Record<string, unknown>[],
+  tableSchema: TableSchema,
+  tableName: string,
+  options?: ValidateOptions
+): void
+```
+
+### `PawQLValidationError`
+
+Custom error class thrown by `assertValid()`.
+
+```typescript
+class PawQLValidationError extends Error {
+  readonly table: string;
+  readonly details: { row: number; errors: ValidationError[] }[];
+}
+```
+
+### `ValidateOptions`
+
+```typescript
+interface ValidateOptions {
+  partial?: boolean;       // Allow missing columns (default: false)
+  skipDefaults?: boolean;  // Skip columns with defaults (default: true)
+  skipPrimaryKey?: boolean; // Skip primary key columns (default: false)
+}
+```
+
+See [Parameter Validation Guide](./validation.md) for detailed usage.
+
+---
+
+## Seeders
+
+PawQL provides a declarative way to populate databases with initial or test data.
+
+### `seed(db, data, options?)`
+
+Seed the database with data. Validates against schema, wraps in transaction, and returns a result.
+
+```typescript
+import { seed } from 'pawql';
+
+function seed<TSchema extends DatabaseSchema>(
+  db: Database<TSchema>,
+  data: SeedData<TSchema>,
+  options?: SeederOptions
+): Promise<SeedResult>
+```
+
+**Returns:** `SeedResult`
+
+```typescript
+interface SeedResult {
+  totalRows: number;
+  tables: { name: string; rows: number }[];
+}
+```
+
+**Example:**
+```typescript
+const result = await seed(db, {
+  users: [
+    { id: 1, name: 'Alice', age: 28 },
+    { id: 2, name: 'Bob', age: 32 },
+  ],
+}, { truncate: true, validate: true });
+
+console.log(result.totalRows); // 2
+```
+
+### `createSeeder(db, defaultOptions?)`
+
+Create a reusable seeder function with default options.
+
+```typescript
+import { createSeeder } from 'pawql';
+
+function createSeeder<TSchema extends DatabaseSchema>(
+  db: Database<TSchema>,
+  defaultOptions?: SeederOptions
+): (data: SeedData<TSchema>, options?: SeederOptions) => Promise<SeedResult>
+```
+
+**Example:**
+```typescript
+const seeder = createSeeder(db, { validate: true, transaction: true });
+await seeder({ users: [...] });
+```
+
+### `SeederOptions`
+
+```typescript
+interface SeederOptions {
+  truncate?: boolean;            // Delete rows first (default: false)
+  validate?: boolean;            // Validate against schema (default: true)
+  validateOptions?: ValidateOptions; // Validator options
+  transaction?: boolean;         // Wrap in transaction (default: true)
+  onSeed?: (tableName: string, rowCount: number) => void; // Progress callback
+}
+```
+
+### `SeedData<TSchema>`
+
+```typescript
+type SeedData<TSchema extends DatabaseSchema> = {
+  [K in keyof TSchema]?: Record<string, unknown>[];
+};
+```
+
+See [Seeders Guide](./seeders.md) for detailed usage.
+

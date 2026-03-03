@@ -5,6 +5,14 @@ export * from "./core/adapter.js";
 export * from "./core/logger.js";
 export * from "./adapters/pg.js";
 
+// Validator
+export { validateRow, assertValid, PawQLValidationError } from "./core/validator.js";
+export type { ValidationError, ValidationResult, ValidateOptions } from "./core/validator.js";
+
+// Seeder
+export { seed, createSeeder } from "./core/seeder.js";
+export type { SeedData, SeederOptions, SeedResult } from "./core/seeder.js";
+
 // Query Builder
 export * from "./query/builder.js";
 export type { SoftDeleteConfig } from "./query/builder.js";

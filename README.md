@@ -28,7 +28,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - ⚡ **Lightweight Core** — Minimal abstraction, ideal for serverless & edge
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 
-### Capabilities (v0.6.0)
+### Capabilities (v0.7.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -50,6 +50,8 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **JSDoc**: Complete documentation for all public APIs
 - **Soft Delete**: Native `deleted_at` handling (`.softDelete()`, `.restore()`, `.withTrashed()`, `.onlyTrashed()`)
 - **Integration Tests**: Comprehensive tests with real PostgreSQL via Docker
+- **Seeders**: `seed()` and `createSeeder()` for populating initial data with validation
+- **Parameter Validation**: Runtime `validateRow()` and `assertValid()` checks against schema types
 
 ## When Should You Use PawQL?
 
@@ -148,6 +150,57 @@ await db.query('users').where({ id: 1 }).restore().execute();
 
 See **[Soft Delete Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** for full details.
 
+## Seeders
+
+PawQL includes a built-in seeder to populate your database with initial or test data:
+
+```typescript
+import { createDB, PostgresAdapter, seed } from 'pawql';
+
+await seed(db, {
+  users: [
+    { id: 1, name: 'Alice', email: 'alice@example.com', age: 28 },
+    { id: 2, name: 'Bob', email: 'bob@example.com', age: 32 },
+  ],
+  posts: [
+    { id: 1, userId: 1, title: 'Hello World', content: '...' },
+  ],
+}, {
+  truncate: true,       // Clear tables first
+  validate: true,       // Validate against schema
+  transaction: true,    // Atomic operation
+});
+```
+
+See **[Seeders Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/seeders.md)** for full details.
+
+## Parameter Validation
+
+Catch type mismatches before they hit the database:
+
+```typescript
+import { validateRow, assertValid, PawQLValidationError } from 'pawql';
+
+// Non-throwing validation
+const result = validateRow({ id: 'wrong', name: 123 }, schema.users);
+console.log(result.valid);   // false
+console.log(result.errors);  // [{ column: 'id', message: '...', ... }]
+
+// Throwing validation
+try {
+  assertValid(data, schema.users, 'users');
+} catch (e) {
+  if (e instanceof PawQLValidationError) {
+    console.log(e.table);    // 'users'
+    console.log(e.details);  // structured error details
+  }
+}
+```
+
+Supports all types: `Number`, `String`, `Boolean`, `Date`, `UUID`, `Enum`, `Array`, `JSON` — including nested array element validation.
+
+See **[Parameter Validation Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/validation.md)** for full details.
+
 ## Advanced Types
 
 ```typescript
@@ -213,6 +266,8 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Transactions](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/transactions.md)** — Atomic operations
 - **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations with CLI
 - **[Soft Delete](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** — Soft delete with `.withTrashed()`, `.onlyTrashed()`
+- **[Seeders](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/seeders.md)** — Populate initial data with `seed()` and `createSeeder()`
+- **[Parameter Validation](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/validation.md)** — Runtime type validation with `validateRow()` and `assertValid()`
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for unit tests + Docker integration tests
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 

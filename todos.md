@@ -54,8 +54,8 @@
 
 - [x] **Integration Tests**: Comprehensive tests with real PostgreSQL (via Docker)
 - [x] **Soft Delete**: Native `deleted_at` handling (`.withTrashed()`, `.onlyTrashed()`)
-- [ ] **Seeders**: Helper to populate initial data
-- [ ] **Parameter Validation**: Runtime check for input values against schema types
+- [x] **Seeders**: Helper to populate initial data
+- [x] **Parameter Validation**: Runtime check for input values against schema types
 - [ ] **Query Timeout**: Support canceling long-running queries
 - [ ] **Hooks / Middleware**: `beforeInsert`, `afterUpdate`, etc.
 - [ ] **Relations**: Define `hasMany`, `belongsTo` in schema for auto-joins
