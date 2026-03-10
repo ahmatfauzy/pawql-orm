@@ -5,7 +5,7 @@
 PawQL is a modern, type-safe database query builder that infers types directly from your runtime schema definition. No CLI tools, no `.prisma` files, no generated code.
 
 [![npm version](https://img.shields.io/npm/v/pawql)](https://www.npmjs.com/package/pawql)
-[![CI](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml)
+<!-- [![CI](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmatfauzy/pawql-orm/actions/workflows/ci.yml) -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why PawQL?
@@ -26,8 +26,9 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - 🛠️ **Zero Build Step** — No CLI, no schema files, no generated clients
 - ⚡ **Lightweight Core** — Minimal abstraction, ideal for serverless & edge
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
+- 🔌 **Multi-Database** — Native adapters for PostgreSQL, MySQL, and SQLite
 
-### Capabilities (v0.8.0)
+### Capabilities (v1.0.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -54,6 +55,8 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **Query Timeout**: `.timeout(ms)` support with `PawQLTimeoutError` for canceling long-running queries
 - **Hooks / Middleware**: `db.hook()` for `beforeInsert`, `afterUpdate`, etc. with data mutation support
 - **Relations**: `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
+- **Multi-Database**: Use `PostgresAdapter`, `MysqlAdapter`, or `SqliteAdapter` interchangeably
+- **Introspection CLI**: `pawql introspect` automatically generates runtime schema files from live databases
 
 ## When Should You Use PawQL?
 
@@ -349,6 +352,8 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Query Timeout](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/query-timeout.md)** — Cancel long-running queries with `.timeout(ms)`
 - **[Hooks / Middleware](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/hooks.md)** — Lifecycle hooks: `beforeInsert`, `afterUpdate`, etc.
 - **[Relations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/relations.md)** — `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
+- **[Multi-Database](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/adapters.md)** — PostgreSQL, MySQL/MariaDB, SQLite native adapters
+- **[Introspection](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/introspection.md)** — `pawql introspect` automatically generates runtime schema files from live databases
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for unit tests + Docker integration tests
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 

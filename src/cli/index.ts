@@ -152,6 +152,18 @@ async function main() {
         break;
       }
 
+      case "introspect": {
+        console.log("Introspecting database...\n");
+        const { introspectDatabase } = await import("./introspect.js");
+        const schemaCode = await introspectDatabase(config.adapter);
+        
+        const outFile = args[1] || "schema.ts";
+        const outPath = path.resolve(process.cwd(), outFile);
+        fs.writeFileSync(outPath, schemaCode, "utf8");
+        console.log(`✅ Introspection complete! Schema written to ${outPath}`);
+        break;
+      }
+
       default:
         console.error(`Unknown command: ${command}`);
         console.log(HELP);

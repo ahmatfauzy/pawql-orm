@@ -239,7 +239,7 @@ test("Soft Delete - count() excludes soft-deleted rows", async () => {
   await db.query('users').count();
 
   const lastLog = adapter.logs[adapter.logs.length - 1]!;
-  assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) FROM "users" WHERE "deleted_at" IS NULL');
+  assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) as count FROM "users" WHERE "deleted_at" IS NULL');
 });
 
 test("Soft Delete - count() with withTrashed() counts all rows", async () => {
@@ -251,7 +251,7 @@ test("Soft Delete - count() with withTrashed() counts all rows", async () => {
   await db.query('users').withTrashed().count();
 
   const lastLog = adapter.logs[adapter.logs.length - 1]!;
-  assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) FROM "users"');
+  assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) as count FROM "users"');
 });
 
 // ============================================

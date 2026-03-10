@@ -1168,3 +1168,41 @@ class RelationManager {
 ```
 
 See [Relations Guide](./relations.md) for detailed usage.
+
+---
+
+## Introspection
+
+### `pawql introspect`
+
+Generates a `schema.ts` file from an existing database by inspecting `information_schema` or `PRAGMA table_info`.
+
+```bash
+npx pawql introspect [output-file]
+```
+
+### `introspectDatabase(adapter)`
+
+Programmatic API for introspection.
+
+```typescript
+import { introspectDatabase } from "pawql/cli/introspect";
+const code = await introspectDatabase(db.adapter);
+```
+
+See [Introspection Guide](./introspection.md) for detailed usage.
+
+---
+
+## Adapters
+
+PawQL exposes three native adapters. See [Adapters Guide](./adapters.md) for details.
+
+### `PostgresAdapter`
+Wraps `pg`. Includes connection pool management.
+
+### `MysqlAdapter`
+Wraps `mysql2` promises.
+
+### `SqliteAdapter`
+Wraps `better-sqlite3` and adapts it to async workflow.

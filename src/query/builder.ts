@@ -703,7 +703,7 @@ export class QueryBuilder<
     const tableUser = this._quote(this._table);
     const values: any[] = [];
     
-    let sql = `SELECT COUNT(*) FROM ${tableUser}`;
+    let sql = `SELECT COUNT(*) as count FROM ${tableUser}`;
     sql += this._buildJoins();
     sql += this._buildWhere(values);
     sql += this._buildSoftDeleteWhere(values);

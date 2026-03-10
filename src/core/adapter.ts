@@ -55,6 +55,12 @@ export interface DatabaseAdapter {
   transaction<T>(callback: (trx: DatabaseAdapter) => Promise<T>): Promise<T>;
 
   /**
+   * The dialect of the database (e.g., 'postgres', 'mysql', 'sqlite').
+   * Optional, but required for features like schema introspection.
+   */
+  dialect?: 'postgres' | 'mysql' | 'sqlite' | string;
+
+  /**
    * Disconnect from the database and release all resources.
    */
   close(): Promise<void>;

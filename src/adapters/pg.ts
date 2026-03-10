@@ -114,6 +114,10 @@ export class PostgresAdapter implements DatabaseAdapter {
    * @param params - Parameter values matching the placeholders
    * @returns Query result with `rows` and `rowCount`
    */
+  get dialect() {
+    return 'postgres';
+  }
+
   async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
     const executor = this.client || this.pool;
     if (!executor) throw new Error("Adapter is closed or invalid");

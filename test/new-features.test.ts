@@ -163,7 +163,7 @@ test("count() - basic count", async () => {
     await db.query('users').count();
 
     const lastLog = adapter.logs[adapter.logs.length - 1]!;
-    assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) FROM "users"');
+    assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) as count FROM "users"');
     assert.deepStrictEqual(lastLog.params, []);
 });
 
@@ -176,7 +176,7 @@ test("count() - with WHERE", async () => {
         .count();
 
     const lastLog = adapter.logs[adapter.logs.length - 1]!;
-    assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) FROM "users" WHERE "age" > $1');
+    assert.strictEqual(lastLog.sql, 'SELECT COUNT(*) as count FROM "users" WHERE "age" > $1');
     assert.deepStrictEqual(lastLog.params, [18]);
 });
 

@@ -4,6 +4,8 @@ export * from "./core/database.js";
 export * from "./core/adapter.js";
 export * from "./core/logger.js";
 export * from "./adapters/pg.js";
+export * from "./adapters/mysql.js";
+export * from "./adapters/sqlite.js";
 
 // Validator
 export { validateRow, assertValid, PawQLValidationError } from "./core/validator.js";

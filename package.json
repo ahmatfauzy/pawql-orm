@@ -1,6 +1,6 @@
 {
   "name": "pawql",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "The Runtime-First ORM for TypeScript. Type-safe database query builder with zero code generation.",
   "type": "module",
   "main": "./dist/index.js",
@@ -50,12 +50,22 @@
     "sql",
     "postgresql",
     "postgres",
+    "mysql",
+    "sqlite",
+    "mariadb",
+    "multi-database",
     "type-safe",
     "runtime-first",
     "zero-codegen",
     "no-build-step",
     "lightweight-orm",
-    "bun"
+    "bun",
+    "migrations",
+    "hooks",
+    "relations",
+    "introspection",
+    "soft-delete",
+    "seeders"
   ],
   "author": "Ahmat Fauzi",
   "license": "MIT",
@@ -70,11 +80,13 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.16.0",
+    "better-sqlite3": "^12.6.2",
+    "mysql2": "^3.19.1",
     "tsx": "^4.19.0",
     "typescript": "^5"
   },
   "peerDependencies": {
-    "typescript": "^5",
-    "pg": "^8.18.0"
+    "pg": "^8.18.0",
+    "typescript": "^5"
   }
 }

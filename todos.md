@@ -59,8 +59,8 @@
 - [x] **Query Timeout**: Support canceling long-running queries
 - [x] **Hooks / Middleware**: `beforeInsert`, `afterUpdate`, etc.
 - [x] **Relations**: Define `hasMany`, `belongsTo` in schema for auto-joins
-- [ ] **Schema Introspection**: Generate PawQL schema from existing database
-- [ ] **Multi-database**: MySQL / SQLite adapter support
+- [x] **Schema Introspection**: Generate PawQL schema from existing database
+- [x] **Multi-database**: MySQL / SQLite adapter support
 
 ---
 
