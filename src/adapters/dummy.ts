@@ -32,6 +32,13 @@ export class DummyAdapter implements DatabaseAdapter {
     }
   }
 
+  quote(identifier: string): string {
+    if (identifier === "*") return identifier;
+    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('"')) return identifier;
+    if (identifier.includes(".")) return identifier.split(".").map(part => `"${part}"`).join(".");
+    return `"${identifier}"`;
+  }
+
   /**
    * Record a query without executing it.
    * Always returns an empty result set.

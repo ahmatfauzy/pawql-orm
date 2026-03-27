@@ -73,6 +73,44 @@ export function arrayType<C extends ColumnConstructor>(itemType: C): ArrayType<I
 }
 
 // =============================================
+// String Extensions & Number Extensions
+// =============================================
+
+/** Marker for Varchar columns */
+export class VarcharType {
+  readonly _brand = "varchar" as const;
+  readonly length: number;
+  constructor(length: number) { this.length = length; }
+}
+
+/** Marker for Text columns */
+export class TextType {
+  readonly _brand = "text" as const;
+}
+
+/** Marker for BigInt columns */
+export class BigIntType {
+  readonly _brand = "bigint" as const;
+}
+
+/** Marker for Decimal columns */
+export class DecimalType {
+  readonly _brand = "decimal" as const;
+  readonly precision: number;
+  readonly scale: number;
+  constructor(precision: number, scale: number) {
+    this.precision = precision;
+    this.scale = scale;
+  }
+}
+
+export function varchar(length: number = 255): VarcharType { return new VarcharType(length); }
+export function text(): TextType { return new TextType(); }
+export function bigint(): BigIntType { return new BigIntType(); }
+export function decimal(precision: number = 10, scale: number = 2): DecimalType { return new DecimalType(precision, scale); }
+
+
+// =============================================
 // Column Constructor Types
 // =============================================
 
@@ -89,7 +127,11 @@ export type ColumnTypeValue =
   | JsonType
   | UuidType
   | EnumType
-  | ArrayType;
+  | ArrayType
+  | VarcharType
+  | TextType
+  | BigIntType
+  | DecimalType;
 
 // Extended column definition for more complex types (nullable, default, etc.)
 export interface ColumnDefinition<T = any> {
@@ -101,7 +143,7 @@ export interface ColumnDefinition<T = any> {
 }
 
 // A column can be a simple constructor, a marker instance, or a complex definition
-export type ColumnSchema = ColumnConstructor | JsonType | UuidType | EnumType | ArrayType | ColumnDefinition;
+export type ColumnSchema = ColumnConstructor | JsonType | UuidType | EnumType | ArrayType | VarcharType | TextType | BigIntType | DecimalType | ColumnDefinition;
 
 // A table is a record of column schemas
 export type TableSchema = Record<string, ColumnSchema>;
@@ -127,6 +169,10 @@ export type InferAdvancedType<T> =
   T extends UuidType ? string :
   T extends EnumType<infer U> ? U :
   T extends ArrayType<infer U> ? U :
+  T extends VarcharType ? string :
+  T extends TextType ? string :
+  T extends BigIntType ? number | string :
+  T extends DecimalType ? number | string :
   never;
 
 // Infers the TypeScript type from a ColumnDefinition
@@ -147,6 +193,10 @@ export type InferColumnType<T> =
   T extends UuidType ? string :
   T extends EnumType ? InferAdvancedType<T> :
   T extends ArrayType ? InferAdvancedType<T> :
+  T extends VarcharType ? string :
+  T extends TextType ? string :
+  T extends BigIntType ? number | string :
+  T extends DecimalType ? number | string :
   T extends ColumnDefinition ? InferColumnDefinitionType<T> :
   never;
 

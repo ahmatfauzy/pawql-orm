@@ -1,12 +1,13 @@
-
 // Core
-export * from "./core/database.js";
+export { Database, createDB, connect } from "./core/database.js";
+export type { DatabaseOptions, PawQLPlugin } from "./core/database.js";
 export * from "./core/adapter.js";
 export * from "./core/logger.js";
+export * from "./core/hooks.js";
+export * from "./core/introspect.js";
 export * from "./adapters/pg.js";
 export * from "./adapters/mysql.js";
 export * from "./adapters/sqlite.js";
-
 // Validator
 export { validateRow, assertValid, PawQLValidationError } from "./core/validator.js";
 export type { ValidationError, ValidationResult, ValidateOptions } from "./core/validator.js";
@@ -47,3 +48,7 @@ export * from "./types/schema.js";
 // Migration
 export { Migrator, createMigrationRunner } from "./migration/index.js";
 export type { Migration, MigrationRunner, MigrationConfig, MigrationRecord } from "./migration/types.js";
+
+// Plugins
+export { openTelemetryPlugin } from "./plugins/telemetry.js";
+export type { OpenTelemetryTracer } from "./plugins/telemetry.js";

@@ -1,14 +1,11 @@
 {
   "name": "pawql",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "The Runtime-First ORM for TypeScript. Type-safe database query builder with zero code generation.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "pawql": "./dist/cli/index.js"
-  },
   "exports": {
     ".": {
       "import": "./dist/index.js",

@@ -1,10 +1,18 @@
 
 import { DatabaseAdapter, QueryResult } from "./adapter.js";
-import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor } from "../types/schema.js";
+import { DatabaseSchema, TableSchema, InferTableType, JsonType, UuidType, EnumType, ArrayType, ColumnConstructor, VarcharType, TextType, BigIntType, DecimalType } from "../types/schema.js";
 import { QueryBuilder, SoftDeleteConfig } from "../query/builder.js";
 import { PawQLLogger } from "./logger.js";
 import { HookRegistry, HookEvent, HookCallback } from "./hooks.js";
 import { RelationManager, RelationsSchema } from "./relations.js";
+
+/**
+ * A plugin for PawQL to extend or wrap database functionality.
+ */
+export interface PawQLPlugin {
+  name: string;
+  setup(db: Database<any>): void;
+}
 
 /**
  * Configuration options for creating a PawQL database instance.
@@ -66,6 +74,11 @@ export interface DatabaseOptions {
    * ```
    */
   relations?: RelationsSchema;
+
+  /**
+   * Plugins to extend PawQL functionality.
+   */
+  plugins?: PawQLPlugin[];
 }
 
 /**
@@ -254,16 +267,13 @@ export class Database<TSchema extends DatabaseSchema> {
       async close(): Promise<void> {
         return adapter.close();
       },
+      quote(identifier: string): string {
+        return adapter.quote(identifier);
+      },
+      get dialect() {
+        return adapter.dialect;
+      }
     };
-  }
-
-  /**
-   * Quote a SQL identifier (table or column name).
-   * @internal
-   */
-  private _quote(identifier: string): string {
-    if (identifier.startsWith('"')) return identifier;
-    return `"${identifier}"`;
   }
 
   /**
@@ -281,7 +291,7 @@ export class Database<TSchema extends DatabaseSchema> {
       
       for (const [colName, colSchema] of Object.entries(tableSchema as any)) {
         const schema = colSchema as any; 
-        const quotedCol = this._quote(colName);
+        const quotedCol = this._adapter.quote(colName);
         
         let sql = `${quotedCol} `;
         
@@ -301,6 +311,8 @@ export class Database<TSchema extends DatabaseSchema> {
           type = schema;
         } else if (schema instanceof ArrayType) {
           type = schema;
+        } else if (schema instanceof VarcharType || schema instanceof TextType || schema instanceof BigIntType || schema instanceof DecimalType) {
+          type = schema;
         } else {
           type = schema.type;
           isNullable = !!schema.nullable;
@@ -318,6 +330,10 @@ export class Database<TSchema extends DatabaseSchema> {
         else if (type instanceof EnumType) {
           sql += "TEXT";
         }
+        else if (type instanceof VarcharType) sql += `VARCHAR(${type.length})`;
+        else if (type instanceof TextType) sql += "TEXT";
+        else if (type instanceof BigIntType) sql += "BIGINT";
+        else if (type instanceof DecimalType) sql += `DECIMAL(${type.precision}, ${type.scale})`;
         else if (type instanceof ArrayType) {
           const itemType = type.itemType;
           if (itemType === Number) sql += "INTEGER[]";
@@ -346,7 +362,7 @@ export class Database<TSchema extends DatabaseSchema> {
         columns.push(sql);
       }
 
-      const createTableSql = `CREATE TABLE IF NOT EXISTS ${this._quote(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
+      const createTableSql = `CREATE TABLE IF NOT EXISTS ${this._adapter.quote(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
       await this._adapter.query(createTableSql);
     }
   }
@@ -407,5 +423,43 @@ export function createDB<TSchema extends DatabaseSchema>(
   adapter: DatabaseAdapter,
   options?: DatabaseOptions
 ): Database<TSchema> {
-  return new Database(schema, adapter, options);
+  const db = new Database(schema, adapter, options);
+  if (options?.plugins) {
+    for (const plugin of options.plugins) {
+      plugin.setup(db);
+    }
+  }
+  return db;
+}
+
+/**
+ * Creates a database instance resolving the adapter automatically using a connection URL.
+ * It uses lazy imports to prevent importing drivers that aren't installed.
+ *
+ * @example
+ * ```typescript
+ * const db = await connect(schema, 'postgres://user:pass@localhost:5432/mydb');
+ * ```
+ */
+export async function connect<TSchema extends DatabaseSchema>(
+  schema: TSchema,
+  url: string,
+  options?: DatabaseOptions
+): Promise<Database<TSchema>> {
+  let adapter: DatabaseAdapter;
+
+  if (url.startsWith('postgres://') || url.startsWith('postgresql://')) {
+    const { PostgresAdapter } = await import('../adapters/pg.js');
+    adapter = new PostgresAdapter({ connectionString: url });
+  } else if (url.startsWith('mysql://')) {
+    const { MysqlAdapter } = await import('../adapters/mysql.js');
+    adapter = new MysqlAdapter({ uri: url });
+  } else if (url.startsWith('sqlite://')) {
+    const { SqliteAdapter } = await import('../adapters/sqlite.js');
+    adapter = new SqliteAdapter(url.replace('sqlite://', ''));
+  } else {
+    throw new Error(`Unsupported Database URL dialect: ${url}`);
+  }
+
+  return createDB(schema, adapter, options);
 }

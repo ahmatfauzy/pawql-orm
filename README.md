@@ -28,7 +28,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 - 🔌 **Multi-Database** — Native adapters for PostgreSQL, MySQL, and SQLite
 
-### Capabilities (v1.0.0)
+### Capabilities (v2.0.0)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
 - **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
@@ -36,16 +36,19 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **LIMIT / OFFSET**: Pagination support
 - **Joins**: `INNER`, `LEFT`, `RIGHT`, `FULL` JOIN with type inference
 - **Transactions**: Atomic operations with auto-rollback
-- **Data Types**: `String`, `Number`, `Boolean`, `Date`, `JSON`, `UUID`, `Enum`, `Array`
+- **Data Types**: `String`, `Number`, `Boolean`, `Date`, `JSON`, `UUID`, `Enum`, `Array`, `varchar`, `text`, `bigint`, `decimal`
 - **DDL**: Auto-generate tables from schema with `db.createTables()`
 - **Controllable RETURNING**: Choose which columns to return from mutations
 - **Shortcuts**: `.first()` for single row, `.count()` for counting
-- **Migrations**: `migrate:make`, `migrate:up`, `migrate:down` 
+- **Migrations**: Programmatic `MigrationRunner` for safe schema transitions 
 - **Raw SQL**: `db.raw(sql, params)` — escape hatch for custom queries
 - **Upsert**: `INSERT ... ON CONFLICT DO UPDATE / DO NOTHING`
+- **Batch Inserts**: Transparent chunking optimization for bulk array insertions
 - **GROUP BY + HAVING**: Aggregation query support
 - **Subqueries**: Subqueries in WHERE and FROM clauses
-- **Logger / Debug Mode**: Built-in `consoleLogger` to inspect generated SQL
+- **Logger / Debug Mode**: `.toString()` dump capability to inspect raw injected SQL queries
+- **Streaming**: Native AsyncGenerator `.stream()` iteration functionality for massive chunks
+- **Plugins**: Extensible community adapter system setup (`PawQLPlugin`)
 - **Pool Management**: Exposed connection pool options (max, idle timeout, etc.)
 - **JSDoc**: Complete documentation for all public APIs
 - **Soft Delete**: Native `deleted_at` handling (`.softDelete()`, `.restore()`, `.withTrashed()`, `.onlyTrashed()`)
@@ -56,7 +59,7 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - **Hooks / Middleware**: `db.hook()` for `beforeInsert`, `afterUpdate`, etc. with data mutation support
 - **Relations**: `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
 - **Multi-Database**: Use `PostgresAdapter`, `MysqlAdapter`, or `SqliteAdapter` interchangeably
-- **Introspection CLI**: `pawql introspect` automatically generates runtime schema files from live databases
+- **Introspection**: `introspectDatabase()` runtime API safely reverse-engineers legacy DB schemas without forcing CLI templates.
 
 ## When Should You Use PawQL?
 
@@ -85,30 +88,20 @@ npm install better-sqlite3  # SQLite (Node.js) — Bun has built-in support
 ## Quick Start
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
-// or: import { createDB, MysqlAdapter } from 'pawql';
-// or: import { createDB, SqliteAdapter } from 'pawql';
+import { connect } from 'pawql';
 
-// 1. Define your schema using plain JS objects
-const db = createDB({
+// 1. Define your schema using standard JavaScript constructors or custom PawQL markers
+// 2. Pass in the Connection Dialect String directly.
+const db = await connect({
   users: {
     id: { type: Number, primaryKey: true },
     name: String,
-    email: { type: String, nullable: true },
-    age: Number,
     isActive: { type: Boolean, default: true },
-  },
-  posts: {
-    id: { type: Number, primaryKey: true },
-    userId: Number,
-    title: String,
-    content: String,
+    createdAt: Date,
   }
-}, new PostgresAdapter({ connectionString: process.env.DATABASE_URL }));
-// or: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' })
-// or: new SqliteAdapter('mydb.sqlite')  — or ':memory:' for tests
+}, 'postgres://user:pass@localhost:5432/mydb');
 
-// 2. Create tables (DDL)
+// 3. Optional: Sync tables dynamically to DB (great for prototyping)
 await db.createTables();
 
 // 3. Insert data
@@ -236,6 +229,17 @@ try {
 
 See **[Query Timeout Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/query-timeout.md)** for full details.
 
+## Streaming Large Data
+Use `.stream()` to retrieve rows natively using Generator bounds, avoiding Memory OOM:
+
+```typescript
+for await (const chunk of db.query('users').stream(100)) {
+  console.log(`Processing batch of ${chunk.length}`);
+}
+```
+
+See **[Streaming Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/streaming.md)** for full details.
+
 ## Hooks / Middleware
 
 Register lifecycle hooks for cross-cutting concerns:
@@ -295,14 +299,15 @@ See **[Relations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/r
 ## Advanced Types
 
 ```typescript
-import { createDB, uuid, json, enumType, arrayType } from 'pawql';
+import { createDB, uuid, json, enumType, arrayType, varchar, decimal } from 'pawql';
 
 const db = createDB({
   events: {
     id: uuid,                                    // UUID
-    name: String,                                // TEXT
+    name: varchar(255),                          // VARCHAR(255)
     type: enumType('conference', 'meetup'),       // TEXT + CHECK constraint
     tags: arrayType(String),                     // TEXT[]
+    fee: decimal(5, 2),                          // DECIMAL(5, 2)
     details: json<{ location: string }>(),       // JSONB with TypeScript generic
     createdAt: Date,                             // TIMESTAMP
   }
@@ -363,8 +368,10 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Hooks / Middleware](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/hooks.md)** — Lifecycle hooks: `beforeInsert`, `afterUpdate`, etc.
 - **[Relations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/relations.md)** — `hasMany`, `belongsTo`, `hasOne` with `.with()` auto-joins
 - **[Multi-Database](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/adapters.md)** — PostgreSQL, MySQL/MariaDB, SQLite native adapters
-- **[Introspection](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/introspection.md)** — `pawql introspect` automatically generates runtime schema files from live databases
+- **[Introspection](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/introspection.md)** — programmatic reverse-engineering of schemas
 - **[Testing](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/testing.md)** — Using DummyAdapter for unit tests + Docker integration tests
+- **[Streaming](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/streaming.md)** — Async execution arrays using native Generator streams.
+- **[Plugins](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/plugins.md)** — Hook community integrations globally via `PawQLPlugin`.
 - **[API Reference](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/api-reference.md)** — Complete API listing (logger, pool, all methods)
 
 ## Philosophy

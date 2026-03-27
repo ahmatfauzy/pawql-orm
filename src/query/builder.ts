@@ -434,11 +434,17 @@ export class QueryBuilder<
    * db.query('users').select('id', 'name')
    * ```
    */
+  select<K extends keyof TResult & string>(
+    ...columns: K[]
+  ): QueryBuilder<TTable, Pick<TResult, K>, TSchema>;
   select(
     ...columns: string[]
-  ): QueryBuilder<TTable, TResult, TSchema> {
+  ): QueryBuilder<TTable, any, TSchema>;
+  select(
+    ...columns: string[]
+  ): QueryBuilder<TTable, any, TSchema> {
     this._select = columns;
-    return this;
+    return this as any;
   }
 
   /**
@@ -665,9 +671,33 @@ export class QueryBuilder<
     // Run before hooks
     await this._runBeforeHook();
 
-    const { sql, values } = this.toSQL();
-    const result = await this._executeWithTimeout<TResult>(sql, values);
-    const rows = result.rows;
+    let rows: TResult[] = [];
+
+    // Chunked Insert Optimization
+    if (this._operation === "INSERT" && Array.isArray(this._data) && this._data.length > 0) {
+      // Safely chunk large inserts to prevent Exceeding max parameters (e.g., PostgreSQL has 65535 limit)
+      const keysCount = Object.keys(this._data[0] || {}).length || 1;
+      const CHUNK_SIZE = Math.max(1, Math.floor(30000 / keysCount)); // Max 30,000 parameters per chunk
+
+      const fullData = this._data;
+      if (fullData.length > CHUNK_SIZE) {
+        for (let i = 0; i < fullData.length; i += CHUNK_SIZE) {
+          this._data = fullData.slice(i, i + CHUNK_SIZE);
+          const { sql, values } = this.toSQL();
+          const result = await this._executeWithTimeout<TResult>(sql, values);
+          rows.push(...result.rows);
+        }
+        this._data = fullData; // restore array
+      } else {
+        const { sql, values } = this.toSQL();
+        const result = await this._executeWithTimeout<TResult>(sql, values);
+        rows = result.rows;
+      }
+    } else {
+      const { sql, values } = this.toSQL();
+      const result = await this._executeWithTimeout<TResult>(sql, values);
+      rows = result.rows;
+    }
 
     // Run after hooks
     await this._runAfterHook(rows);
@@ -714,6 +744,45 @@ export class QueryBuilder<
     const result = await this._executeWithTimeout<{ count: string | number }>(sql, values);
     const row = result.rows[0];
     return row ? Number(row.count) : 0;
+  }
+
+  /**
+   * Stream results in chunks using limit/offset pagination.
+   * Useful for processing large datasets without loading everything into memory.
+   *
+   * @example
+   * ```typescript
+   * for await (const chunk of db.query('users').stream(100)) {
+   *   console.log(chunk); // array of 100 rows
+   * }
+   * ```
+   */
+  async *stream(chunkSize: number = 100): AsyncGenerator<TResult[], void, unknown> {
+    const originalOffset = this._offset || 0;
+    const originalLimit = this._limit;
+    
+    let currentOffset = originalOffset;
+    let rowsToStream = originalLimit !== undefined ? originalLimit : Infinity;
+    
+    while (rowsToStream > 0) {
+      const take = Math.min(chunkSize, rowsToStream);
+      this._limit = take;
+      this._offset = currentOffset;
+      
+      const chunk = await this.execute();
+      
+      if (chunk.length === 0) break;
+      yield chunk;
+      
+      rowsToStream -= chunk.length;
+      currentOffset += chunk.length;
+      
+      if (chunk.length < take) break;
+    }
+    
+    // Restore original limit/offset
+    this._limit = originalLimit;
+    this._offset = originalOffset;
   }
 
   then<TResult1 = TResult[], TResult2 = never>(
@@ -834,16 +903,7 @@ export class QueryBuilder<
 
   // Helper to quote identifiers (table/column names)
   private _quote(identifier: string): string {
-    if (identifier === "*") return identifier;
-    // Don't quote if already quoted or complex expression (simple heuristic)
-    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('"')) {
-        return identifier;
-    }
-    // Handle "table.column"
-    if (identifier.includes(".")) {
-        return identifier.split(".").map(part => `"${part}"`).join(".");
-    }
-    return `"${identifier}"`;
+    return this._adapter.quote(identifier);
   }
 
   // Helper to build WHERE clause (extracted for reuse in count)
@@ -999,7 +1059,7 @@ export class QueryBuilder<
       : ` WHERE ${col} IS NULL`;
   }
 
-  toSQL(): { sql: string; values: any[] } {
+  toSQL(): { sql: string; values: any[]; toString: () => string } {
     const columns = this._select.length > 0
         ? this._select.map(c => this._quote(c)).join(", ")
         : "*";
@@ -1090,6 +1150,31 @@ export class QueryBuilder<
       }
     }
 
-    return { sql, values };
+    return { 
+      sql, 
+      values,
+      toString() {
+        let debugSql = sql;
+        for (let i = 0; i < values.length; i++) {
+          let val = values[i];
+          if (typeof val === 'string') val = `'${val.replace(/'/g, "''")}'`;
+          else if (val instanceof Date) val = `'${val.toISOString()}'`;
+          else if (val === null) val = 'NULL';
+          else if (typeof val === 'object') val = `'${JSON.stringify(val).replace(/'/g, "''")}'`;
+          else val = String(val);
+          
+          debugSql = debugSql.replace(new RegExp(`\\$${i + 1}(?!\\d)`, 'g'), val);
+        }
+        return debugSql;
+      }
+    };
+  }
+
+  /**
+   * Return the raw SQL string with values injected for debugging purposes.
+   * Note: Do not use this string for direct execution to avoid SQL injection risks.
+   */
+  toString(): string {
+    return this.toSQL().toString();
   }
 }

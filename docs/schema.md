@@ -26,6 +26,8 @@ const schema = {
 | `Boolean` | `BOOLEAN` | `boolean` |
 | `Date` | `TIMESTAMP` | `Date` |
 
+> Note: For precise sizing like `VARCHAR(255)` or `DECIMAL(10,2)`, check out the [Custom Types](#custom-types) section.
+
 ## Column Options
 
 For more advanced configuration, use an object definition:
@@ -147,6 +149,23 @@ const schema = {
 ```sql
 "tags" TEXT[] NOT NULL,
 "scores" INTEGER[] NOT NULL
+```
+
+### Custom Types
+
+For finer-grained SQL definitions beyond standard Javascript primitives, import explicit markers from PawQL:
+
+```typescript
+import { varchar, text, bigint, decimal } from 'pawql';
+
+const schema = {
+  transactions: {
+    id: bigint(),                   // → BIGINT, TypeScript: number|string
+    description: varchar(255),      // → VARCHAR(255), TypeScript: string
+    notes: text(),                  // → TEXT, TypeScript: string
+    balance: decimal(10, 2),        // → DECIMAL(10, 2), TypeScript: number|string
+  }
+};
 ```
 
 ## Multiple Tables

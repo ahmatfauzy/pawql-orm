@@ -61,6 +61,11 @@ export interface DatabaseAdapter {
   dialect?: 'postgres' | 'mysql' | 'sqlite' | string;
 
   /**
+   * Quote a SQL identifier (table or column name) safely for this dialect.
+   */
+  quote(identifier: string): string;
+
+  /**
    * Disconnect from the database and release all resources.
    */
   close(): Promise<void>;

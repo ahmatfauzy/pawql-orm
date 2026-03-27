@@ -48,6 +48,10 @@ class SlowAdapter implements DatabaseAdapter {
     }
   }
 
+  quote(identifier: string): string {
+    return `"${identifier}"`;
+  }
+
   async close(): Promise<void> {}
 }
 

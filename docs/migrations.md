@@ -1,59 +1,39 @@
 # Migrations
 
-PawQL includes a built-in migration system that stays true to its **runtime-first philosophy** — no code generation, no build step. You write migration files using the same PawQL schema types you already know, and the CLI handles the rest.
+PawQL includes a built-in migration system that stays true to its **runtime-first philosophy** — no code generation, no build step, no CLI required. You manage migration files programmatically using standard TypeScript execution.
 
 ## Overview
 
-| Command | Description |
-|---------|-------------|
-| `pawql migrate:make <name>` | Create a new timestamped migration file |
-| `pawql migrate:up` | Run all pending migrations |
-| `pawql migrate:down` | Rollback the last batch of migrations |
+The `Migrator` runtime class allows you to `make()`, `up()`, and `down()` migrations strictly via your own codebase runtime. This gives you absolute control over when and how migrations execute (e.g. hooking it inside a `server.js` startup script).
 
-## Setup
+## Setup & Programmatic Usage
 
-### 1. Create a config file
-
-Create a `pawql.config.ts` (or `.js`/`.mjs`) in your project root:
+### 1. Initialize the Migrator
 
 ```typescript
-// pawql.config.ts
-import { PostgresAdapter } from 'pawql';
-// or: import { MysqlAdapter } from 'pawql';
-// or: import { SqliteAdapter } from 'pawql';
+import { connect, Migrator } from 'pawql';
 
-export default {
-  adapter: new PostgresAdapter({
-    connectionString: process.env.DATABASE_URL,
-  }),
-  // or: adapter: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' }),
-  // or: adapter: new SqliteAdapter('mydb.sqlite'),
+const db = await connect({}, process.env.DATABASE_URL!);
 
-  migrations: {
-    directory: './migrations',       // default: './migrations'
-    tableName: 'pawql_migrations',   // default: 'pawql_migrations'
-  },
-};
+const migrator = new Migrator(db._adapter, {
+  directory: './migrations',       // your folder path
+  tableName: 'pawql_migrations',   // tracker table
+});
 ```
 
-The config file must export an `adapter` property — a valid PawQL `DatabaseAdapter` instance. The `migrations` object is optional; it defaults to the values shown above.
+### 2. Create Migration Files
 
-### 2. Create your first migration
+You can create migration templates via the migrator instance run locally:
 
-```bash
-npx pawql migrate:make create_users
-```
-
-This creates a timestamped file in your migrations directory:
-
-```
-migrations/
-  20260224123456_create_users.ts
+```typescript
+const filePath = migrator.make('create_users');
+console.log('Created:', filePath);
+// Output: Created: ./migrations/20260224123456_create_users.ts
 ```
 
 ### 3. Write the migration
 
-Open the generated file and fill in the `up()` and `down()` functions:
+Open the new file and fill in the `up()` and `down()` functions:
 
 ```typescript
 import type { MigrationRunner } from 'pawql';
@@ -74,34 +54,20 @@ export default {
 };
 ```
 
-### 4. Run the migration
+### 4. Execute Pending Migrations
 
-```bash
-npx pawql migrate:up
+When your server starts, you can apply them programmatically:
+
+```typescript
+const applied = await migrator.up();
+console.log('Applied migrations:', applied);
 ```
 
-Output:
-```
-Running pending migrations...
+### 5. Rollback
 
-  ✅ 20260224123456_create_users
-
-1 migration(s) applied.
-```
-
-### 5. Rollback if needed
-
-```bash
-npx pawql migrate:down
-```
-
-Output:
-```
-Rolling back last batch...
-
-  ↩️  20260224123456_create_users
-
-1 migration(s) rolled back.
+```typescript
+const rolledBack = await migrator.down();
+console.log('Rolled back last batch:', rolledBack);
 ```
 
 ## MigrationRunner API
@@ -249,43 +215,6 @@ export default {
 };
 ```
 
-## Programmatic Usage
-
-You can also use the `Migrator` class directly from your code (e.g., in tests or deployment scripts):
-
-```typescript
-import { Migrator, PostgresAdapter } from 'pawql';
-// or: import { Migrator, MysqlAdapter } from 'pawql';
-// or: import { Migrator, SqliteAdapter } from 'pawql';
-
-const adapter = new PostgresAdapter({
-  connectionString: process.env.DATABASE_URL,
-});
-// or: const adapter = new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' });
-// or: const adapter = new SqliteAdapter('mydb.sqlite');
-
-const migrator = new Migrator(adapter, {
-  directory: './migrations',
-});
-
-// Run pending migrations
-const applied = await migrator.up();
-console.log('Applied:', applied);
-
-// Rollback last batch
-const rolledBack = await migrator.down();
-console.log('Rolled back:', rolledBack);
-
-// Get pending migrations
-const pending = await migrator.getPending();
-console.log('Pending:', pending);
-
-// Create a new migration file
-const filePath = migrator.make('add_comments_table');
-console.log('Created:', filePath);
-
-await adapter.close();
-```
 
 ## Philosophy
 
@@ -303,5 +232,4 @@ This keeps PawQL true to its core promise: **The Runtime-First ORM for TypeScrip
 1. **Name your migrations descriptively**: `create_users`, `add_email_to_posts`, `rename_status_column`.
 2. **Always write a `down()`**: Even if you think you'll never rollback, it's good practice.
 3. **Use raw SQL for complex operations**: Indexes, constraints, triggers — use `runner.sql()`.
-4. **Test migrations locally**: Use `migrate:up` and `migrate:down` in dev before deploying.
-5. **Run via `npx tsx`**: If you're on Node.js, the CLI uses `tsx` to run `.ts` migration files. Make sure `tsx` is installed as a dev dependency.
+4. **Test migrations locally**: Use `migrator.up()` and `migrator.down()` in dev before deploying.

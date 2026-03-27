@@ -1,51 +1,31 @@
 # Schema Introspection
 
-PawQL provides a CLI tool to automatically generate a `DatabaseSchema` object from an existing database. This is very useful when adopting PawQL into a project that already has an established database schema.
-
-## Supported Databases
-Introspection is supported for:
-- **PostgreSQL**
-- **MySQL / MariaDB**
-- **SQLite**
+PawQL provides a runtime function to extract and reverse-engineer a `DatabaseSchema` object from an existing database. This is entirely programmatic and avoids any CLI-based code generation, staying true to our Zero-Codegen philosophy.
 
 ## Usage
 
-First, ensure you have a `pawql.config.ts` (or `.js`) file in your project root that exports your DatabaseAdapter:
+You can use the `introspectDatabase` function in your own setup scripts or API endpoints.
 
 ```typescript
-// pawql.config.js
-import { PostgresAdapter } from 'pawql';
+import { connect, introspectDatabase } from 'pawql';
 
-export default {
-  adapter: new PostgresAdapter({ connectionString: 'postgres://user:pass@localhost:5432/mydb' }),
-  // or MysqlAdapter / SqliteAdapter
-};
+async function introspect() {
+  const db = await connect({}, 'postgres://user:pass@localhost:5432/mydb');
+
+  // Extracts the schema from the live PostgreSQL database
+  const schemaCode = await introspectDatabase(db.adapter);
+  
+  // You can print it or write it to a file yourself using fs.writeFileSync
+  console.log(schemaCode);
+  
+  await db.close();
+}
+
+introspect();
 ```
 
-Then, run the introspect command:
-
-```bash
-npx pawql introspect
-```
-
-By default, this will scan your database and create a `schema.ts` file in the current directory.
-
-### Custom Output File
-
-You can specify a custom output path:
-
-```bash
-npx pawql introspect my-schema.ts
-```
-
-## Generated Code
-
-The command generates a standard PawQL schema definition. It automatically maps native SQL types to PawQL types (`Number`, `String`, `Boolean`, `Date`, etc.) and determines nullability and primary keys.
-
-**Example `schema.ts` output:**
+Resulting `schemaCode` output preview:
 ```typescript
-import type { DatabaseSchema } from "pawql";
-
 export const schema = {
   users: {
     id: { type: Number, primaryKey: true },
@@ -58,7 +38,5 @@ export const schema = {
     title: String,
     user_id: Number,
   },
-} satisfies DatabaseSchema;
+};
 ```
-
-You can then import this `schema` object to initialize your `createDB()` instance.

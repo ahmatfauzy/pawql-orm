@@ -204,6 +204,20 @@ console.log(`${activeCount} of ${totalUsers} users are active`);
 
 > Generates `SELECT COUNT(*) FROM "users" WHERE ...`
 
+## Debugging: `.toString()`
+
+Before executing any query, you can dump the raw SQL string with values injected literally.
+
+```typescript
+const debugSql = db.query('users')
+  .where({ name: 'Alice' })
+  .toString();
+
+console.log(debugSql);
+// Output: SELECT * FROM "users" WHERE "name" = 'Alice'
+```
+*(Warning: Never run `.toString()` output directly without an adapter; it's designed for local debugging and logging only).*
+
 ## Joins
 
 ### Inner Join
@@ -414,6 +428,7 @@ await db.raw(`
 
 ## Next Steps
 
+- [Streaming](../docs/streaming.md) — Cursor-based query retrieval
 - [Mutations](./mutations.md) — INSERT, UPDATE, DELETE
 - [Transactions](./transactions.md) — Atomic operations
 - [API Reference](./api-reference.md) — Complete API reference

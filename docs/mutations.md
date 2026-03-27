@@ -41,6 +41,8 @@ INSERT INTO "users" ("id", "name", "email")
 VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9) RETURNING *
 ```
 
+> **Performance Note**: PawQL automatically implements **Chunked Insert Optimization** inside `.execute()`. You can pass an array block of hundreds of thousands of rows concurrently up to ~30,000 values, and PawQL will silently segment and loop them seamlessly to avoid the standard PostgreSQL max parameter limit `Out of Bounds` errors.
+
 ## UPDATE
 
 ### Update with WHERE

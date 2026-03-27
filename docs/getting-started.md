@@ -26,22 +26,20 @@ npm install better-sqlite3  # SQLite (Node.js — Bun has built-in support)
 ### 1. Create a Database Connection
 
 ```typescript
-import { createDB, PostgresAdapter } from 'pawql';
-// or: import { createDB, MysqlAdapter } from 'pawql';
-// or: import { createDB, SqliteAdapter } from 'pawql';
+import { connect } from 'pawql';
 
-const db = createDB({
+const db = await connect({
   users: {
     id: { type: Number, primaryKey: true },
     name: String,
     email: { type: String, nullable: true },
     isActive: { type: Boolean, default: true },
   }
-}, new PostgresAdapter({
-  connectionString: 'postgresql://user:password@localhost:5432/mydb'
-}));
-// or: new MysqlAdapter({ host: 'localhost', user: 'root', database: 'mydb' })
-// or: new SqliteAdapter('mydb.sqlite')  — or ':memory:' for tests
+}, 'postgresql://user:password@localhost:5432/mydb');
+
+// Alternatively via manual imports:
+// import { createDB, PostgresAdapter } from 'pawql';
+// const db = createDB(schema, new PostgresAdapter(...));
 ```
 
 ### 2. Synchronize Database (DDL)
@@ -157,17 +155,14 @@ export const schema = {
 ### `src/db/connection.ts`
 
 ```typescript
-import { createDB, PostgresAdapter, consoleLogger } from 'pawql';
-// or: import { createDB, MysqlAdapter, consoleLogger } from 'pawql';
-// or: import { createDB, SqliteAdapter, consoleLogger } from 'pawql';
+import { connect, consoleLogger } from 'pawql';
 import { schema } from './schema.js';
 
-export const db = createDB(schema, new PostgresAdapter({
-  connectionString: process.env.DATABASE_URL!,
-  max: 20,
-}), {
-  logger: consoleLogger,      // Optional: log all SQL to console
-});
+export const db = await connect(
+  schema, 
+  process.env.DATABASE_URL!, 
+  { logger: consoleLogger } // Optional: log all SQL to console
+);
 ```
 
 ## Next Steps

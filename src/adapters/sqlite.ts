@@ -44,6 +44,13 @@ export class SqliteAdapter implements DatabaseAdapter {
     return "sqlite" as const;
   }
 
+  quote(identifier: string): string {
+    if (identifier === "*") return identifier;
+    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('"')) return identifier;
+    if (identifier.includes(".")) return identifier.split(".").map(part => `"${part}"`).join(".");
+    return `"${identifier}"`;
+  }
+
   private async _getDb(): Promise<any> {
     if (this._db) return this._db;
 

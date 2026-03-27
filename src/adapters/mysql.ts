@@ -63,6 +63,13 @@ export class MysqlAdapter implements DatabaseAdapter {
     return 'mysql';
   }
 
+  quote(identifier: string): string {
+    if (identifier === "*") return identifier;
+    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('`')) return identifier;
+    if (identifier.includes(".")) return identifier.split(".").map(part => `\`${part}\``).join(".");
+    return `\`${identifier}\``;
+  }
+
   async query<T = any>(sql: string, params?: any[]): Promise<QueryResult<T>> {
     const conn = await this._getConn();
     
