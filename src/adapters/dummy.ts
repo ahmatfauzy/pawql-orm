@@ -21,22 +21,36 @@ import { DatabaseAdapter, QueryResult } from "../core/adapter.js";
  */
 export class DummyAdapter implements DatabaseAdapter {
   private _logs: { sql: string; params: any[] }[] = [];
+  private _dialect: string;
 
   /**
    * Create a new DummyAdapter.
-   * @param logsRef - Optional shared log array (used internally for transaction child adapters)
+   * @param logsOrDialect - Optional shared log array or dialect string
+   * @param dialect - Optional dialect override (postgres | mysql | sqlite)
    */
-  constructor(logsRef?: { sql: string; params: any[] }[]) {
-    if (logsRef) {
-      this._logs = logsRef;
+  constructor(logsOrDialect?: { sql: string; params: any[] }[] | string, dialect?: string) {
+    if (Array.isArray(logsOrDialect)) {
+      this._logs = logsOrDialect;
+      this._dialect = dialect || "postgres";
+    } else if (typeof logsOrDialect === "string") {
+      this._dialect = logsOrDialect;
+    } else {
+      this._dialect = "postgres";
     }
+  }
+
+  get dialect(): string {
+    return this._dialect;
   }
 
   quote(identifier: string): string {
     if (identifier === "*") return identifier;
-    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('"')) return identifier;
-    if (identifier.includes(".")) return identifier.split(".").map(part => `"${part}"`).join(".");
-    return `"${identifier}"`;
+    if (identifier.includes("(") || identifier.includes(" ") || identifier.startsWith('"') || identifier.startsWith('`')) return identifier;
+    if (identifier.includes(".")) {
+      const q = this._dialect === "mysql" ? "`" : '"';
+      return identifier.split(".").map(part => `${q}${part}${q}`).join(".");
+    }
+    return this._dialect === "mysql" ? `\`${identifier}\`` : `"${identifier}"`;
   }
 
   /**
@@ -72,7 +86,7 @@ export class DummyAdapter implements DatabaseAdapter {
     try {
       // Pass a new DummyAdapter that shares the same log reference
       // so we can assert on all logs in one place
-      const trxAdapter = new DummyAdapter(this._logs);
+      const trxAdapter = new DummyAdapter(this._logs, this._dialect);
       const result = await callback(trxAdapter);
       
       this._logs.push({ sql: 'COMMIT', params: [] });

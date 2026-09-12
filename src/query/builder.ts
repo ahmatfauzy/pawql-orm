@@ -388,6 +388,7 @@ export class QueryBuilder<
   /**
    * Perform a RIGHT JOIN with another table.
    * All rows from the right table are returned; left columns may be `null`.
+   * Note: SQLite does not support RIGHT JOIN.
    */
   rightJoin<K extends keyof TSchema & string>(
     table: K,
@@ -395,6 +396,12 @@ export class QueryBuilder<
     operator: string,
     col2: string
   ): QueryBuilder<TTable, TResult & Partial<InferTableType<TSchema[K]>>, TSchema> {
+    const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+    if (dialect === "sqlite") {
+      throw new Error(
+        `RIGHT JOIN is not supported on SQLite. Use leftJoin() with swapped tables, or switch to Postgres/MySQL.`
+      );
+    }
     this._joins.push({
       type: "RIGHT",
       table: table,
@@ -406,6 +413,7 @@ export class QueryBuilder<
   /**
    * Perform a FULL OUTER JOIN with another table.
    * All rows from both tables are returned; non-matching columns may be `null`.
+   * Note: MySQL and SQLite do not support FULL JOIN.
    */
   fullJoin<K extends keyof TSchema & string>(
     table: K,
@@ -413,6 +421,12 @@ export class QueryBuilder<
     operator: string,
     col2: string
   ): QueryBuilder<TTable, TResult & Partial<InferTableType<TSchema[K]>>, TSchema> {
+    const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+    if (dialect === "mysql" || dialect === "sqlite") {
+      throw new Error(
+        `FULL JOIN is not supported on ${dialect}. Use UNION of LEFT JOINs, or switch to PostgreSQL.`
+      );
+    }
     this._joins.push({
       type: "FULL",
       table: table,
@@ -482,8 +496,15 @@ export class QueryBuilder<
            this._where.push({ type, column, operator: "NOT IN", value: ops.notIn });
         if ("like" in ops)
           this._where.push({ type, column, operator: "LIKE", value: ops.like });
-        if ("ilike" in ops)
+        if ("ilike" in ops) {
+          const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+          if (dialect === "mysql" || dialect === "sqlite") {
+            throw new Error(
+              `ILIKE is only supported on PostgreSQL. Column "${String(column)}" used { ilike: "${ops.ilike}" } but adapter is "${dialect}". Use { like: "%value%" } with a case-insensitive collation, or switch to Postgres for ILIKE.`
+            );
+          }
            this._where.push({ type, column, operator: "ILIKE", value: ops.ilike });
+        }
         if ("gt" in ops)
           this._where.push({ type, column, operator: ">", value: ops.gt });
         if ("lt" in ops)
@@ -1009,8 +1030,10 @@ export class QueryBuilder<
     return ` ORDER BY ${clauses.join(", ")}`;
   }
 
-  // Helper to build RETURNING clause
+  // Helper to build RETURNING clause — MySQL does not support RETURNING
   private _buildReturning(): string {
+    const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+    if (dialect === "mysql") return "";
     if (this._returning === false) return "";
     if (this._returning === true) return " RETURNING *";
     if (Array.isArray(this._returning) && this._returning.length > 0) {
@@ -1019,9 +1042,15 @@ export class QueryBuilder<
     return " RETURNING *";
   }
 
-  // Helper to build ON CONFLICT clause
+  // Helper to build ON CONFLICT clause — Postgres/SQLite only
   private _buildOnConflict(values: any[]): string {
     if (!this._onConflict) return "";
+    const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+    if (dialect === "mysql") {
+      throw new Error(
+        `ON CONFLICT is not supported on MySQL. Use db.raw("INSERT ... ON DUPLICATE KEY UPDATE ...") instead. Columns: ${this._onConflict.columns.join(", ")}`
+      );
+    }
     const cols = this._onConflict.columns.map(c => this._quote(c)).join(", ");
     if (this._onConflict.action === "DO NOTHING") {
       return ` ON CONFLICT (${cols}) DO NOTHING`;

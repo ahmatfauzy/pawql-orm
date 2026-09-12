@@ -5,6 +5,7 @@ import { QueryBuilder, SoftDeleteConfig } from "../query/builder.js";
 import { PawQLLogger } from "./logger.js";
 import { HookRegistry, HookEvent, HookCallback } from "./hooks.js";
 import { RelationManager, RelationsSchema } from "./relations.js";
+import { buildColumnSQL } from "./dialect.js";
 
 /**
  * A plugin for PawQL to extend or wrap database functionality.
@@ -293,9 +294,6 @@ export class Database<TSchema extends DatabaseSchema> {
         const schema = colSchema as any; 
         const quotedCol = this._adapter.quote(colName);
         
-        let sql = `${quotedCol} `;
-        
-        // Determine type and attributes
         let type: any;
         let isNullable = false;
         let isPrimaryKey = false;
@@ -320,46 +318,17 @@ export class Database<TSchema extends DatabaseSchema> {
           defaultValue = schema.default;
         }
 
-        // Map types to SQL
-        if (type === Number) sql += "INTEGER";
-        else if (type === String) sql += "TEXT";
-        else if (type === Boolean) sql += "BOOLEAN";
-        else if (type === Date) sql += "TIMESTAMP";
-        else if (type instanceof JsonType) sql += "JSONB";
-        else if (type instanceof UuidType) sql += "UUID";
-        else if (type instanceof EnumType) {
-          sql += "TEXT";
-        }
-        else if (type instanceof VarcharType) sql += `VARCHAR(${type.length})`;
-        else if (type instanceof TextType) sql += "TEXT";
-        else if (type instanceof BigIntType) sql += "BIGINT";
-        else if (type instanceof DecimalType) sql += `DECIMAL(${type.precision}, ${type.scale})`;
-        else if (type instanceof ArrayType) {
-          const itemType = type.itemType;
-          if (itemType === Number) sql += "INTEGER[]";
-          else if (itemType === String) sql += "TEXT[]";
-          else if (itemType === Boolean) sql += "BOOLEAN[]";
-          else if (itemType === Date) sql += "TIMESTAMP[]";
-          else throw new Error(`Unsupported array item type for column ${tableName}.${colName}`);
-        }
-        else throw new Error(`Unsupported type for column ${tableName}.${colName}`);
-
-        if (isPrimaryKey) sql += " PRIMARY KEY";
-        if (!isNullable && !isPrimaryKey) sql += " NOT NULL";
-        
-        if (type instanceof EnumType && type.values.length > 0) {
-          const allowed = type.values.map((v: string) => `'${v}'`).join(', ');
-          sql += ` CHECK (${quotedCol} IN (${allowed}))`;
-        }
-
-        if (defaultValue !== undefined) {
-          if (typeof defaultValue === 'string') sql += ` DEFAULT '${defaultValue.replace(/'/g, "''")}'`;
-          else if (typeof defaultValue === 'number') sql += ` DEFAULT ${defaultValue}`;
-          else if (typeof defaultValue === 'boolean') sql += ` DEFAULT ${defaultValue ? 'TRUE' : 'FALSE'}`;
-          else if (defaultValue instanceof Date) sql += ` DEFAULT '${defaultValue.toISOString()}'`;
-        }
-
-        columns.push(sql);
+        const colSql = buildColumnSQL(
+          this._adapter,
+          colName,
+          tableName,
+          type,
+          isNullable,
+          isPrimaryKey,
+          defaultValue,
+          quotedCol
+        );
+        columns.push(colSql);
       }
 
       const createTableSql = `CREATE TABLE IF NOT EXISTS ${this._adapter.quote(tableName)} (\n  ${columns.join(',\n  ')}\n);`;

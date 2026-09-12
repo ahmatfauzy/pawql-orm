@@ -28,21 +28,21 @@ PawQL is a modern, type-safe database query builder that infers types directly f
 - 📦 **Modern** — ESM-first, works with Node.js and Bun
 - 🔌 **Multi-Database** — Native adapters for PostgreSQL, MySQL, and SQLite
 
-### Capabilities (v2.0.0)
+### Capabilities (v2.0.1)
 
 - **CRUD**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`
-- **Filtering**: `WHERE`, `OR`, `IN`, `LIKE`, `BETWEEN`, `IS NULL`, comparison operators
+- **Filtering**: `WHERE`, `OR`, `IN`, `LIKE` (all dialects) / `ILIKE` (PostgreSQL-only), `BETWEEN`, `IS NULL`, comparison operators
 - **ORDER BY**: Single/multiple column sorting with ASC/DESC
 - **LIMIT / OFFSET**: Pagination support
-- **Joins**: `INNER`, `LEFT`, `RIGHT`, `FULL` JOIN with type inference
+- **Joins**: `INNER`/`LEFT` (all dialects), `RIGHT` (not SQLite), `FULL` (PostgreSQL-only) with type inference
 - **Transactions**: Atomic operations with auto-rollback
-- **Data Types**: `String`, `Number`, `Boolean`, `Date`, `JSON`, `UUID`, `Enum`, `Array`, `varchar`, `text`, `bigint`, `decimal`
-- **DDL**: Auto-generate tables from schema with `db.createTables()`
-- **Controllable RETURNING**: Choose which columns to return from mutations
+- **Data Types**: `String`, `Number`, `Boolean`, `Date`, `JSON`, `UUID`, `Enum`, `Array` (PostgreSQL-only — use `json()` for MySQL/SQLite), `varchar`, `text`, `bigint`, `decimal`
+- **DDL**: Auto-generate tables from schema with `db.createTables()` (dialect-aware: `UUID`→`VARCHAR(36)`/`TEXT`, `JSONB`→`JSON`/`TEXT`, etc.)
+- **Controllable RETURNING**: Choose which columns to return (PostgreSQL/SQLite — auto-stripped on MySQL)
 - **Shortcuts**: `.first()` for single row, `.count()` for counting
-- **Migrations**: Programmatic `MigrationRunner` for safe schema transitions 
-- **Raw SQL**: `db.raw(sql, params)` — escape hatch for custom queries
-- **Upsert**: `INSERT ... ON CONFLICT DO UPDATE / DO NOTHING`
+- **Migrations**: Pure runtime `Migrator` (`{migrations: Migration[]}`) — no CLI, dialect-aware tracking table
+- **Raw SQL**: `db.raw(sql, params)` — escape hatch for custom queries (`$1`→`?` auto-converted for MySQL/SQLite)
+- **Upsert**: `INSERT ... ON CONFLICT DO UPDATE / DO NOTHING` (PostgreSQL/SQLite — use `ON DUPLICATE KEY UPDATE` via `db.raw()` for MySQL)
 - **Batch Inserts**: Transparent chunking optimization for bulk array insertions
 - **GROUP BY + HAVING**: Aggregation query support
 - **Subqueries**: Subqueries in WHERE and FROM clauses
@@ -303,12 +303,12 @@ import { createDB, uuid, json, enumType, arrayType, varchar, decimal } from 'paw
 
 const db = createDB({
   events: {
-    id: uuid,                                    // UUID
+    id: uuid,                                    // UUID (pg) / VARCHAR(36) (mysql) / TEXT (sqlite)
     name: varchar(255),                          // VARCHAR(255)
     type: enumType('conference', 'meetup'),       // TEXT + CHECK constraint
-    tags: arrayType(String),                     // TEXT[]
+    tags: arrayType(String),                     // TEXT[] — PostgreSQL-only (use json() for MySQL/SQLite)
     fee: decimal(5, 2),                          // DECIMAL(5, 2)
-    details: json<{ location: string }>(),       // JSONB with TypeScript generic
+    details: json<{ location: string }>(),       // JSONB (pg) / JSON (mysql) / TEXT (sqlite) with TypeScript generic
     createdAt: Date,                             // TIMESTAMP
   }
 }, adapter);
@@ -316,37 +316,34 @@ const db = createDB({
 
 ## Migrations
 
-PawQL includes a migration system that stays true to its runtime-first philosophy — **no code generation**, just plain TypeScript migration files using the same schema types you already know.
-
-```bash
-# Create a new migration file
-npx pawql migrate:make create_users
-
-# Run all pending migrations
-npx pawql migrate:up
-
-# Rollback the last batch
-npx pawql migrate:down
-```
-
-Migration files use PawQL's runtime schema types:
+PawQL includes a pure runtime migration system — **no CLI, no files, no code generation**. Migrations are plain objects defined in your codebase and executed via `Migrator` at runtime.
 
 ```typescript
-import type { MigrationRunner } from 'pawql';
+import { Migrator } from 'pawql';
+import type { Migration } from 'pawql';
 
-export default {
-  async up(runner: MigrationRunner) {
-    await runner.createTable('users', {
-      id: { type: Number, primaryKey: true },
-      name: String,
-      email: { type: String, nullable: true },
-    });
+const migrations: Migration[] = [
+  {
+    name: '20260224_create_users',
+    async up(runner) {
+      await runner.createTable('users', {
+        id: { type: Number, primaryKey: true },
+        name: String,
+        email: { type: String, nullable: true },
+      });
+    },
+    async down(runner) {
+      await runner.dropTable('users');
+    },
   },
+];
 
-  async down(runner: MigrationRunner) {
-    await runner.dropTable('users');
-  },
-};
+// Run all pending migrations (e.g. in server startup)
+const migrator = new Migrator(adapter, { migrations });
+await migrator.up();
+
+// Rollback last batch
+await migrator.down();
 ```
 
 See **[Migrations Guide](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** for full details.
@@ -360,7 +357,7 @@ For complete documentation, see the **[docs/](https://github.com/ahmatfauzy/pawq
 - **[Querying](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/querying.md)** — SELECT, WHERE, ORDER BY, joins, GROUP BY, HAVING, subqueries, raw SQL
 - **[Mutations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/mutations.md)** — INSERT, UPDATE, DELETE, RETURNING, upsert (ON CONFLICT)
 - **[Transactions](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/transactions.md)** — Atomic operations
-- **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations with CLI
+- **[Migrations](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/migrations.md)** — Database migrations (pure runtime, no CLI)
 - **[Soft Delete](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/soft-delete.md)** — Soft delete with `.withTrashed()`, `.onlyTrashed()`
 - **[Seeders](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/seeders.md)** — Populate initial data with `seed()` and `createSeeder()`
 - **[Parameter Validation](https://github.com/ahmatfauzy/pawql-orm/blob/main/docs/validation.md)** — Runtime type validation with `validateRow()` and `assertValid()`

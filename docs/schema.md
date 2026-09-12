@@ -19,13 +19,14 @@ const schema = {
 
 ### Type Mapping
 
-| JavaScript | PostgreSQL | TypeScript |
-|-----------|------------|------------|
-| `Number` | `INTEGER` | `number` |
-| `String` | `TEXT` | `string` |
-| `Boolean` | `BOOLEAN` | `boolean` |
-| `Date` | `TIMESTAMP` | `Date` |
+| JavaScript | PostgreSQL | MySQL | SQLite | TypeScript |
+|-----------|------------|-------|--------|------------|
+| `Number` | `INTEGER` | `INTEGER` | `INTEGER` | `number` |
+| `String` | `TEXT` | `TEXT` | `TEXT` | `string` |
+| `Boolean` | `BOOLEAN` | `BOOLEAN` (→ `TINYINT(1)`) | `INTEGER` | `boolean` |
+| `Date` | `TIMESTAMP` | `TIMESTAMP` | `TIMESTAMP` | `Date` |
 
+> Dialect-aware: PawQL generates the correct DDL per adapter (`PostgresAdapter` vs `MysqlAdapter` vs `SqliteAdapter`) via `createTables()` and `MigrationRunner`.
 > Note: For precise sizing like `VARCHAR(255)` or `DECIMAL(10,2)`, check out the [Custom Types](#custom-types) section.
 
 ## Column Options
@@ -69,19 +70,16 @@ import { uuid } from 'pawql';
 
 const schema = {
   users: {
-    id: uuid,    // → UUID, TypeScript type: string
+    id: uuid,    // → UUID (pg) / VARCHAR(36) (mysql) / TEXT (sqlite), TypeScript type: string
     name: String,
   }
 };
 ```
 
-**Generated DDL:**
-```sql
-CREATE TABLE IF NOT EXISTS "users" (
-  "id" UUID NOT NULL,
-  "name" TEXT NOT NULL
-);
-```
+**Generated DDL (dialect-aware):**
+- PostgreSQL: `"id" UUID NOT NULL`
+- MySQL: `` `id` VARCHAR(36) NOT NULL ``
+- SQLite: `"id" TEXT NOT NULL`
 
 ### JSON / JSONB
 
@@ -100,14 +98,13 @@ const schema = {
 };
 ```
 
-- The `metadata` column maps to `JSONB` in PostgreSQL
 - TypeScript knows that `metadata` is of type `{ tags: string[]; color: string; ... }`
 - The generic parameter `<T>` provides type safety for the JSON data
 
-**Generated DDL:**
-```sql
-"metadata" JSONB NOT NULL
-```
+**Generated DDL (dialect-aware):**
+- PostgreSQL: `"metadata" JSONB NOT NULL`
+- MySQL: `` `metadata` JSON NOT NULL ``
+- SQLite: `"metadata" TEXT NOT NULL` (JSON stored as TEXT)
 
 ### Enum
 
@@ -131,7 +128,7 @@ const schema = {
 "role" TEXT NOT NULL CHECK ("role" IN ('admin', 'user', 'guest'))
 ```
 
-### Array
+### Array (PostgreSQL only)
 
 ```typescript
 import { arrayType } from 'pawql';
@@ -145,11 +142,13 @@ const schema = {
 };
 ```
 
-**Generated DDL:**
+**Generated DDL (PostgreSQL only):**
 ```sql
 "tags" TEXT[] NOT NULL,
 "scores" INTEGER[] NOT NULL
 ```
+
+> ⚠️ **PostgreSQL-only**: `arrayType()` uses native `TEXT[]`/`INTEGER[]`. On MySQL/SQLite it throws `ArrayType is only supported on PostgreSQL — Use json() for MySQL/SQLite instead.`. For cross-dialect arrays, use `json<string[]>()`.
 
 ### Custom Types
 
@@ -217,11 +216,12 @@ const posts = await db.query('posts').execute();
 ## DDL (Create Tables)
 
 ```typescript
-// Create all tables defined in the schema
+// Create all tables defined in the schema (dialect-aware)
 await db.createTables();
 ```
 
-This runs `CREATE TABLE IF NOT EXISTS` for each table. It's safe to run multiple times — existing tables will not be affected.
+This runs `CREATE TABLE IF NOT EXISTS` for each table with dialect-correct types (`UUID`→`VARCHAR(36)`/`TEXT`, `JSONB`→`JSON`/`TEXT`, `BOOLEAN`→`INTEGER` on SQLite). It's safe to run multiple times — existing tables will not be affected.
+> Use migrations (`Migrator`) for production schema transitions.
 
 ## Next Steps
 

@@ -33,7 +33,8 @@ const schema = {
 };
 
 test('should generate correct SELECT SQL', async () => {
-  const adapter = new DummyAdapter();
+  const adapter = new DummyAdapter(); // defaults to postgres dialect
+  // For dialect-specific assertions: new DummyAdapter('mysql') or new DummyAdapter('sqlite')
   const db = createDB(schema, adapter);
 
   await db.query('users')
@@ -46,6 +47,9 @@ test('should generate correct SELECT SQL', async () => {
   assert.strictEqual(lastLog.sql, 'SELECT "id", "name" FROM "users" WHERE "id" = $1');
   assert.deepStrictEqual(lastLog.params, [1]);
 });
+```
+
+> **Dialect-aware**: `new DummyAdapter('postgres'|'mysql'|'sqlite')` controls quoting (`"id"` vs `` `id` ``), `RETURNING`, `ILIKE`/`ON CONFLICT`/`FULL JOIN` guards, and DDL type mapping.
 ```
 
 ## DummyAdapter API
@@ -161,16 +165,18 @@ test('test 2', async () => {
 });
 ```
 
-### Pattern 4: DDL Testing
+### Pattern 4: DDL Testing (dialect-aware)
 
 ```typescript
 test('creates correct table DDL', async () => {
-  const adapter = new DummyAdapter();
+  const adapter = new DummyAdapter('postgres');
   const db = createDB({
     products: {
       id: { type: Number, primaryKey: true },
       name: String,
       price: Number,
+      meta: json<{a:string}>(),
+      uid: uuid,
     }
   }, adapter);
 
@@ -181,7 +187,23 @@ test('creates correct table DDL', async () => {
   assert.ok(sql.includes('"id" INTEGER PRIMARY KEY'));
   assert.ok(sql.includes('"name" TEXT NOT NULL'));
   assert.ok(sql.includes('"price" INTEGER NOT NULL'));
+  assert.ok(sql.includes('"meta" JSONB NOT NULL')); // MySQL→JSON, SQLite→TEXT
+  assert.ok(sql.includes('"uid" UUID NOT NULL')); // MySQL→VARCHAR(36), SQLite→TEXT
 });
+
+test('arrayType only on postgres', async () => {
+  const pg = new DummyAdapter('postgres');
+  const mysql = new DummyAdapter('mysql');
+  assert.doesNotThrow(async () => {
+    const r = createMigrationRunner(pg);
+    await r.createTable('t', { tags: arrayType(String) });
+  });
+  await assert.rejects(async () => {
+    const r = createMigrationRunner(mysql);
+    await r.createTable('t', { tags: arrayType(String) });
+  }, /ArrayType is only supported on PostgreSQL/);
+});
+```
 ```
 
 ## Compatible Test Runners

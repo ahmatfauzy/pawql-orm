@@ -95,18 +95,20 @@ const result = await db.query('users')
 ### LIKE / ILIKE
 
 ```typescript
-// Case-sensitive pattern matching
+// Case-sensitive pattern matching (all dialects)
 const result = await db.query('users')
   .where({ name: { like: '%Alice%' } })
   .execute();
 // → WHERE "name" LIKE $1
 
-// Case-insensitive (PostgreSQL)
+// Case-insensitive — PostgreSQL only
 const result2 = await db.query('users')
   .where({ name: { ilike: '%alice%' } })
   .execute();
 // → WHERE "name" ILIKE $1
 ```
+
+> ⚠️ **PostgreSQL-only**: `ilike` throws on MySQL/SQLite: `ILIKE is only supported on PostgreSQL — Use {like} with a case-insensitive collation, or switch to Postgres`.
 
 ### BETWEEN
 
@@ -220,6 +222,8 @@ console.log(debugSql);
 
 ## Joins
 
+> `innerJoin` and `leftJoin` work on all dialects. See dialect notes for `rightJoin`/`fullJoin` below.
+
 ### Inner Join
 
 ```typescript
@@ -239,7 +243,7 @@ const usersWithPosts = await db.query('users')
 // Left join: columns from posts can be null
 ```
 
-### Right Join
+### Right Join (Not supported on SQLite)
 
 ```typescript
 const postsWithUsers = await db.query('posts')
@@ -247,13 +251,17 @@ const postsWithUsers = await db.query('posts')
   .execute();
 ```
 
-### Full Join
+> ⚠️ **SQLite-only guard**: `rightJoin()` throws on SQLite: `RIGHT JOIN is not supported on SQLite — Use leftJoin() with swapped tables`.
+
+### Full Join (PostgreSQL only)
 
 ```typescript
 const all = await db.query('users')
   .fullJoin('posts', 'users.id', '=', 'posts.userId')
   .execute();
 ```
+
+> ⚠️ **PostgreSQL-only**: `fullJoin()` throws on MySQL/SQLite: `FULL JOIN is not supported on mysql/sqlite — Use UNION of LEFT JOINs, or switch to PostgreSQL`.
 
 ### Multiple Joins
 

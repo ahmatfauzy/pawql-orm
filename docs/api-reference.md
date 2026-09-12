@@ -197,7 +197,7 @@ Add a WHERE condition (AND).
 
 // Pattern matching
 .where({ name: { like: '%Alice%' } })
-.where({ name: { ilike: '%alice%' } })
+.where({ name: { ilike: '%alice%' } }) // PostgreSQL only — throws on MySQL/SQLite
 
 // Range
 .where({ age: { between: [18, 60] } })
@@ -268,13 +268,13 @@ leftJoin<K extends keyof TSchema>(
 
 #### `.rightJoin(table, col1, op, col2)`
 
-Same signature as `leftJoin`.
+Same signature as `leftJoin`. **SQLite-only guard**: throws `RIGHT JOIN is not supported on SQLite — Use leftJoin() swapped`.
 
 #### `.fullJoin(table, col1, op, col2)`
 
-Same signature as `leftJoin`.
+Same signature as `leftJoin`. **PostgreSQL-only**: throws on MySQL/SQLite `FULL JOIN is not supported — Use UNION of LEFT JOINs`.
 
-### RETURNING
+### RETURNING (PostgreSQL/SQLite — MySQL auto-stripped)
 
 #### `.returning(...columns)` / `.returning(false)`
 
@@ -283,10 +283,10 @@ returning(...columns: string[]): this  // Specific columns
 returning(false): this                  // Disable RETURNING
 ```
 
-Control the RETURNING clause for INSERT/UPDATE/DELETE.
+Control the RETURNING clause for INSERT/UPDATE/DELETE. On **MySQL**, `RETURNING` is automatically stripped (MySQL does not support `RETURNING`).
 
 ```typescript
-// Default: RETURNING *
+// Default: RETURNING * on Postgres/SQLite, stripped on MySQL
 db.query('users').insert({ ... })
 
 // Specific columns
@@ -322,7 +322,7 @@ db.query('orders')
   .having('SUM(total) > $1', 1000)
 ```
 
-### Upsert (ON CONFLICT)
+### Upsert (ON CONFLICT — PostgreSQL/SQLite only)
 
 #### `.onConflict(...columns)`
 
@@ -333,18 +333,21 @@ onConflict(...columns: string[]): {
 }
 ```
 
-Specify conflict columns for upsert. Chain with `.doUpdate(data)` or `.doNothing()`.
+Specify conflict columns for upsert. **PostgreSQL/SQLite only** — throws on MySQL `ON CONFLICT is not supported on MySQL — Use db.raw("INSERT ... ON DUPLICATE KEY UPDATE ...")`.
 
 ```typescript
-// Skip duplicates
+// Skip duplicates (PostgreSQL/SQLite)
 db.query('users')
   .insert({ id: 1, name: 'Alice' })
   .onConflict('id').doNothing()
 
-// Update on conflict
+// Update on conflict (PostgreSQL/SQLite)
 db.query('users')
   .insert({ id: 1, name: 'Alice' })
   .onConflict('id').doUpdate({ name: 'Alice Updated' })
+
+// MySQL alternative
+await db.raw('INSERT INTO `users` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name`=VALUES(`name`)', [1,'Alice'])
 ```
 
 ### Subqueries
@@ -550,15 +553,19 @@ An array containing all executed queries.
 
 ## `Migrator`
 
-The migration manager class. Import from `pawql` or `pawql/migration`.
+Pure runtime migration manager — no CLI, no files. Import from `pawql` or `pawql/migration`.
 
 ```typescript
 import { Migrator } from 'pawql';
+import type { Migration } from 'pawql';
 
-// ...
+const migrations: Migration[] = [
+  { name: '20260224_create_users', async up(r) { /* ... */ }, async down(r) { /* ... */ } },
+];
+
 const migrator = new Migrator(adapter, {
-  directory: './migrations',
-  tableName: 'pawql_migrations'
+  migrations, // required — ordered array, source of truth
+  tableName: 'pawql_migrations' // optional
 });
 ```
 
@@ -568,7 +575,7 @@ const migrator = new Migrator(adapter, {
 up(): Promise<string[]>
 ```
 
-Run all pending migrations. Returns an array of applied migration names.
+Run all pending migrations (those in `migrations` array not yet in tracking table). Returns an array of applied migration names.
 
 ### `migrator.down()`
 
@@ -578,21 +585,13 @@ down(): Promise<string[]>
 
 Rollback the last batch of migrations. Returns an array of rolled-back migration names.
 
-### `migrator.make(name)`
-
-```typescript
-make(name: string): string
-```
-
-Create a new migration file with a timestamp prefix. Returns the file path.
-
 ### `migrator.getPending()`
 
 ```typescript
 getPending(): Promise<string[]>
 ```
 
-Get a list of migration names that haven't been applied yet.
+Get a list of migration names that haven't been applied yet (preserves array order).
 
 ### `migrator.getExecuted()`
 
@@ -602,13 +601,13 @@ getExecuted(): Promise<MigrationRecord[]>
 
 Get all executed migration records from the tracking table.
 
-### `migrator.listMigrationFiles()`
+### `migrator.getCurrentBatch()`
 
 ```typescript
-listMigrationFiles(): string[]
+getCurrentBatch(): Promise<number>
 ```
 
-List all migration files in the configured directory (sorted, without extensions).
+Get the current batch number.
 
 ---
 
@@ -630,7 +629,7 @@ Create a table using PawQL runtime schema types.
 dropTable(tableName: string): Promise<void>
 ```
 
-Drop a table with `CASCADE`.
+Drop a table. `CASCADE` is only appended on PostgreSQL (MySQL/SQLite: `DROP TABLE IF EXISTS "tbl"`).
 
 ### `runner.addColumn(tableName, columnName, definition)`
 
@@ -678,8 +677,8 @@ Execute a raw SQL statement.
 
 ```typescript
 interface MigrationConfig {
-  directory?: string;   // Default: './migrations'
-  tableName?: string;   // Default: 'pawql_migrations'
+  migrations: Migration[]; // Required — ordered array, source of truth
+  tableName?: string;      // Default: 'pawql_migrations'
 }
 ```
 
@@ -696,10 +695,11 @@ interface MigrationRecord {
 
 ## `Migration`
 
-The interface for migration files:
+Pure runtime migration object — no file required:
 
 ```typescript
 interface Migration {
+  name: string; // Unique key stored in tracking table
   up(runner: MigrationRunner): Promise<void>;
   down(runner: MigrationRunner): Promise<void>;
 }
@@ -717,10 +717,10 @@ import { uuid, json, enumType, arrayType } from 'pawql';
 
 | Helper | Example | PostgreSQL | TypeScript |
 |--------|---------|------------|------------|
-| `uuid` | `id: uuid` | `UUID` | `string` |
-| `json<T>()` | `meta: json<{a:string}>()` | `JSONB` | `T` |
+| `uuid` | `id: uuid` | `UUID` (pg) / `VARCHAR(36)` (mysql) / `TEXT` (sqlite) | `string` |
+| `json<T>()` | `meta: json<{a:string}>()` | `JSONB` (pg) / `JSON` (mysql) / `TEXT` (sqlite) | `T` |
 | `enumType(...values)` | `role: enumType('a','b')` | `TEXT + CHECK` | `'a' \| 'b'` |
-| `arrayType(Type)` | `tags: arrayType(String)` | `TEXT[]` | `string[]` |
+| `arrayType(Type)` | `tags: arrayType(String)` | `TEXT[]` (PostgreSQL only — throws on MySQL/SQLite) | `string[]` |
 
 ### Column Definition
 
@@ -1178,21 +1178,13 @@ See [Relations Guide](./relations.md) for detailed usage.
 
 ## Introspection
 
-### `pawql introspect`
-
-Generates a `schema.ts` file from an existing database by inspecting `information_schema` or `PRAGMA table_info`.
-
-```bash
-npx pawql introspect [output-file]
-```
-
 ### `introspectDatabase(adapter)`
 
-Programmatic API for introspection.
+Pure runtime API for introspection — no CLI.
 
 ```typescript
-import { introspectDatabase } from "pawql/cli/introspect";
-const code = await introspectDatabase(db.adapter);
+import { introspectDatabase } from "pawql";
+const code = await introspectDatabase(adapter);
 ```
 
 See [Introspection Guide](./introspection.md) for detailed usage.

@@ -19,8 +19,11 @@ const newUser = await db.query('users')
 
 **Generated SQL:**
 ```sql
+-- PostgreSQL / SQLite: RETURNING * included
 INSERT INTO "users" ("id", "name", "email", "isActive") 
 VALUES ($1, $2, $3, $4) RETURNING *
+-- MySQL: RETURNING stripped automatically (MySQL does not support RETURNING)
+-- INSERT INTO `users` (`id`, `name`, `email`, `isActive`) VALUES (?, ?, ?, ?)
 ```
 
 ### Insert Multiple Rows (Batch)
@@ -41,7 +44,7 @@ INSERT INTO "users" ("id", "name", "email")
 VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9) RETURNING *
 ```
 
-> **Performance Note**: PawQL automatically implements **Chunked Insert Optimization** inside `.execute()`. You can pass an array block of hundreds of thousands of rows concurrently up to ~30,000 values, and PawQL will silently segment and loop them seamlessly to avoid the standard PostgreSQL max parameter limit `Out of Bounds` errors.
+> **Performance Note**: PawQL automatically implements **Chunked Insert Optimization** inside `.execute()`. You can pass an array block of hundreds of thousands of rows concurrently up to ~30,000 values, and PawQL will silently segment and loop them seamlessly to avoid the standard PostgreSQL max parameter limit `Out of Bounds` errors. Placeholder conversion (`$1` → `?` for MySQL/SQLite) is automatic.
 
 ## UPDATE
 
@@ -56,8 +59,10 @@ const updated = await db.query('users')
 
 **Generated SQL:**
 ```sql
+-- PostgreSQL / SQLite
 UPDATE "users" SET "name" = $1, "email" = $2 
 WHERE "id" = $3 RETURNING *
+-- MySQL: RETURNING stripped
 ```
 
 ### Update Multiple Rows
@@ -83,7 +88,9 @@ const deleted = await db.query('users')
 
 **Generated SQL:**
 ```sql
+-- PostgreSQL / SQLite
 DELETE FROM "users" WHERE "id" = $1 RETURNING *
+-- MySQL: RETURNING stripped
 ```
 
 ### Delete Multiple Rows
@@ -98,9 +105,9 @@ await db.query('users')
 
 > ⚠️ **Warning**: Without `.where()`, DELETE will remove **all rows** in the table!
 
-## Controllable RETURNING
+## Controllable RETURNING (PostgreSQL/SQLite — MySQL stripped)
 
-By default, mutation operations (INSERT/UPDATE/DELETE) use `RETURNING *`. You can control this behavior:
+By default, mutation operations (INSERT/UPDATE/DELETE) use `RETURNING *` on PostgreSQL/SQLite. On MySQL, `RETURNING` is automatically stripped (MySQL does not support `RETURNING`) — mutations return `rowCount` only. You can control this behavior:
 
 ### Default: RETURNING *
 
@@ -169,9 +176,9 @@ const [result] = await db.query('users')
 console.log(`Created user with ID: ${result.id}`);
 ```
 
-## Upsert (ON CONFLICT)
+## Upsert (ON CONFLICT — PostgreSQL/SQLite only)
 
-PawQL supports PostgreSQL's `INSERT ... ON CONFLICT` for upsert operations.
+PawQL supports `INSERT ... ON CONFLICT` for upsert operations on **PostgreSQL and SQLite**. On MySQL this throws `ON CONFLICT is not supported on MySQL — Use db.raw("INSERT ... ON DUPLICATE KEY UPDATE ...")`.
 
 ### DO NOTHING — Skip on Conflict
 

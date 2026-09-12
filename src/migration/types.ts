@@ -4,9 +4,17 @@
  */
 
 /**
- * A migration file must export an object conforming to this interface.
+ * A migration object for PawQL's pure runtime migration system.
+ * No files, no CLI — just plain objects in your codebase.
+ * The `name` field is the unique key stored in the tracking table.
  */
 export interface Migration {
+  /**
+   * Unique name for this migration (e.g. '20260224_create_users' or 'create_users').
+   * Stored in the `pawql_migrations` table to track execution.
+   */
+  name: string;
+
   /**
    * Apply the migration (e.g. CREATE TABLE, ALTER TABLE, etc.)
    */
@@ -73,13 +81,15 @@ export interface MigrationRecord {
 
 /**
  * Config options for the migration system.
+ * Pure runtime — migrations are provided as in-memory objects, not files.
  */
 export interface MigrationConfig {
   /**
-   * Directory where migration files live.
-   * @default "./migrations"
+   * Array of migration objects in execution order.
+   * Order of the array is the source of truth for pending resolution.
+   * Each migration must have a unique `name`.
    */
-  directory?: string;
+  migrations: Migration[];
 
   /**
    * Name of the tracking table in the database.

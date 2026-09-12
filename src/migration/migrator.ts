@@ -1,48 +1,95 @@
-
 import { DatabaseAdapter } from "../core/adapter.js";
 import { MigrationConfig, MigrationRecord, Migration } from "./types.js";
 import { createMigrationRunner } from "./runner.js";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 const DEFAULT_TABLE = "pawql_migrations";
-const DEFAULT_DIRECTORY = "./migrations";
 
 /**
  * The Migrator class manages migration state and execution.
- * It uses the database adapter directly — no code generation required.
+ * Pure runtime — no file system, no CLI. Migrations are provided as in-memory objects.
+ * Order of `config.migrations` is the source of truth.
  */
 export class Migrator {
   private _adapter: DatabaseAdapter;
   private _tableName: string;
-  private _directory: string;
+  private _migrations: Migration[];
+  private _migrationMap: Map<string, Migration>;
 
-  constructor(adapter: DatabaseAdapter, config?: MigrationConfig) {
+  constructor(adapter: DatabaseAdapter, config: MigrationConfig) {
+    if (!config || !Array.isArray(config.migrations)) {
+      throw new Error(
+        'Migrator requires `migrations: Migration[]` array. Example: new Migrator(adapter, { migrations: [{ name: "create_users", up, down }] })'
+      );
+    }
+
+    // Validate unique names
+    const seen = new Set<string>();
+    for (const m of config.migrations) {
+      if (!m.name || typeof m.name !== "string") {
+        throw new Error('Each migration must have a unique `name: string` property.');
+      }
+      if (seen.has(m.name)) {
+        throw new Error(`Duplicate migration name: "${m.name}"`);
+      }
+      if (typeof m.up !== "function" || typeof m.down !== "function") {
+        throw new Error(
+          `Migration "${m.name}" must have "up" and "down" functions.`
+        );
+      }
+      seen.add(m.name);
+    }
+
     this._adapter = adapter;
-    this._tableName = config?.tableName ?? DEFAULT_TABLE;
-    this._directory = config?.directory ?? DEFAULT_DIRECTORY;
+    this._tableName = config.tableName ?? DEFAULT_TABLE;
+    this._migrations = [...config.migrations];
+    this._migrationMap = new Map(this._migrations.map((m) => [m.name, m]));
   }
 
   /**
    * Ensure the migrations tracking table exists.
+   * Dialect-aware: generates correct auto-increment PK and timestamp default per DB.
    */
   async ensureTable(): Promise<void> {
-    await this._adapter.query(`
-      CREATE TABLE IF NOT EXISTS "${this._tableName}" (
-        "id" SERIAL PRIMARY KEY,
-        "name" TEXT NOT NULL UNIQUE,
-        "batch" INTEGER NOT NULL,
-        "executed_at" TIMESTAMP NOT NULL DEFAULT NOW()
-      );
-    `);
+    const dialect = (this._adapter.dialect?.toLowerCase() || "postgres") as string;
+    const t = this._adapter.quote(this._tableName);
+    const q = (id: string) => this._adapter.quote(id);
+
+    let sql: string;
+    if (dialect === "mysql") {
+      sql = `CREATE TABLE IF NOT EXISTS ${t} (
+        ${q("id")} INT AUTO_INCREMENT PRIMARY KEY,
+        ${q("name")} TEXT NOT NULL,
+        ${q("batch")} INT NOT NULL,
+        ${q("executed_at")} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (${q("name")})
+      );`;
+    } else if (dialect === "sqlite") {
+      sql = `CREATE TABLE IF NOT EXISTS ${t} (
+        ${q("id")} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${q("name")} TEXT NOT NULL UNIQUE,
+        ${q("batch")} INTEGER NOT NULL,
+        ${q("executed_at")} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );`;
+    } else {
+      // postgres and fallback (DummyAdapter defaults to postgres)
+      sql = `CREATE TABLE IF NOT EXISTS ${t} (
+        ${q("id")} SERIAL PRIMARY KEY,
+        ${q("name")} TEXT NOT NULL UNIQUE,
+        ${q("batch")} INTEGER NOT NULL,
+        ${q("executed_at")} TIMESTAMP NOT NULL DEFAULT NOW()
+      );`;
+    }
+
+    await this._adapter.query(sql);
   }
 
   /**
    * Get all executed migration records, ordered by name.
    */
   async getExecuted(): Promise<MigrationRecord[]> {
+    const t = this._adapter.quote(this._tableName);
     const result = await this._adapter.query<MigrationRecord>(
-      `SELECT * FROM "${this._tableName}" ORDER BY "name" ASC`
+      `SELECT * FROM ${t} ORDER BY ${this._adapter.quote("name")} ASC`
     );
     return result.rows;
   }
@@ -51,75 +98,29 @@ export class Migrator {
    * Get the current batch number.
    */
   async getCurrentBatch(): Promise<number> {
+    const t = this._adapter.quote(this._tableName);
+    const col = this._adapter.quote("batch");
     const result = await this._adapter.query<{ max: number | null }>(
-      `SELECT COALESCE(MAX("batch"), 0) AS "max" FROM "${this._tableName}"`
+      `SELECT COALESCE(MAX(${col}), 0) AS "max" FROM ${t}`
     );
     return Number(result.rows[0]?.max ?? 0);
   }
 
   /**
-   * List all migration files from the migration directory.
-   * Files must end in `.ts`, `.mts`, `.js`, or `.mjs`.
-   * Returns sorted filenames (without extension).
-   */
-  listMigrationFiles(): string[] {
-    const dir = path.resolve(this._directory);
-    if (!fs.existsSync(dir)) return [];
-
-    return fs
-      .readdirSync(dir)
-      .filter((f) => /\.(ts|mts|js|mjs)$/.test(f))
-      .filter((f) => !f.endsWith(".d.ts"))
-      .sort()
-      .map((f) => f.replace(/\.(ts|mts|js|mjs)$/, ""));
-  }
-
-  /**
-   * Get pending migration names (files that haven't been executed yet).
+   * Get pending migration names — those in `config.migrations` not yet in tracking table.
+   * Preserves the order of the provided `migrations` array.
    */
   async getPending(): Promise<string[]> {
     await this.ensureTable();
     const executed = await this.getExecuted();
     const executedNames = new Set(executed.map((r) => r.name));
-    const allFiles = this.listMigrationFiles();
-    return allFiles.filter((name) => !executedNames.has(name));
+    return this._migrations
+      .map((m) => m.name)
+      .filter((name) => !executedNames.has(name));
   }
 
   /**
-   * Dynamically import a migration file and return the Migration object.
-   */
-  async loadMigration(name: string): Promise<Migration> {
-    const dir = path.resolve(this._directory);
-    const extensions = [".ts", ".mts", ".js", ".mjs"];
-
-    let filePath: string | null = null;
-    for (const ext of extensions) {
-      const candidate = path.join(dir, name + ext);
-      if (fs.existsSync(candidate)) {
-        filePath = candidate;
-        break;
-      }
-    }
-
-    if (!filePath) {
-      throw new Error(`Migration file not found: ${name}`);
-    }
-
-    // Use dynamic import — works in ESM with both Node.js and Bun
-    const mod = await import(filePath);
-    const migration: Migration = mod.default ?? mod;
-
-    if (typeof migration.up !== "function" || typeof migration.down !== "function") {
-      throw new Error(
-        `Migration "${name}" must export "up" and "down" functions.`
-      );
-    }
-
-    return migration;
-  }
-
-  /**
-   * Run all pending migrations (migrate:up).
+   * Run all pending migrations.
    * Returns the list of migration names that were applied.
    */
   async up(): Promise<string[]> {
@@ -133,12 +134,16 @@ export class Migrator {
     const applied: string[] = [];
 
     for (const name of pending) {
-      const migration = await this.loadMigration(name);
+      const migration = this._migrationMap.get(name);
+      if (!migration) {
+        throw new Error(`Migration "${name}" not found in provided migrations array`);
+      }
       await migration.up(runner);
 
       // Record the migration
+      const insT = this._adapter.quote(this._tableName);
       await this._adapter.query(
-        `INSERT INTO "${this._tableName}" ("name", "batch") VALUES ($1, $2)`,
+        `INSERT INTO ${insT} (${this._adapter.quote("name")}, ${this._adapter.quote("batch")}) VALUES ($1, $2)`,
         [name, batch]
       );
 
@@ -149,7 +154,7 @@ export class Migrator {
   }
 
   /**
-   * Rollback the last batch of migrations (migrate:down).
+   * Rollback the last batch of migrations.
    * Returns the list of migration names that were rolled back.
    */
   async down(): Promise<string[]> {
@@ -159,8 +164,9 @@ export class Migrator {
     if (currentBatch === 0) return [];
 
     // Get migrations from the last batch, in reverse order
+    const t = this._adapter.quote(this._tableName);
     const result = await this._adapter.query<MigrationRecord>(
-      `SELECT * FROM "${this._tableName}" WHERE "batch" = $1 ORDER BY "name" DESC`,
+      `SELECT * FROM ${t} WHERE ${this._adapter.quote("batch")} = $1 ORDER BY ${this._adapter.quote("name")} DESC`,
       [currentBatch]
     );
 
@@ -168,12 +174,19 @@ export class Migrator {
     const rolledBack: string[] = [];
 
     for (const record of result.rows) {
-      const migration = await this.loadMigration(record.name);
+      const migration = this._migrationMap.get(record.name);
+      if (!migration) {
+        throw new Error(
+          `Cannot rollback "${record.name}" — not found in provided migrations array. ` +
+          `Ensure all previously applied migrations are still included.`
+        );
+      }
       await migration.down(runner);
 
       // Remove the record from tracking table
+      const delT = this._adapter.quote(this._tableName);
       await this._adapter.query(
-        `DELETE FROM "${this._tableName}" WHERE "name" = $1`,
+        `DELETE FROM ${delT} WHERE ${this._adapter.quote("name")} = $1`,
         [record.name]
       );
 
@@ -181,49 +194,5 @@ export class Migrator {
     }
 
     return rolledBack;
-  }
-
-  /**
-   * Generate a new migration file (migrate:make).
-   * Creates a timestamped `.ts` file in the migrations directory.
-   * This is a scaffold — the user fills in the `up()` and `down()` logic.
-   */
-  make(name: string): string {
-    const dir = path.resolve(this._directory);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:T]/g, "")
-      .slice(0, 14);
-    const fileName = `${timestamp}_${name}.ts`;
-    const filePath = path.join(dir, fileName);
-
-    const template = `import type { MigrationRunner } from 'pawql';
-
-export default {
-  async up(runner: MigrationRunner) {
-    // Example: Create a table using PawQL runtime schema types
-    // await runner.createTable('users', {
-    //   id: { type: Number, primaryKey: true },
-    //   name: String,
-    //   email: { type: String, nullable: true },
-    // });
-
-    // Or use raw SQL:
-    // await runner.sql('CREATE INDEX idx_users_email ON users(email)');
-  },
-
-  async down(runner: MigrationRunner) {
-    // Revert the migration
-    // await runner.dropTable('users');
-  },
-};
-`;
-
-    fs.writeFileSync(filePath, template, "utf-8");
-    return filePath;
   }
 }

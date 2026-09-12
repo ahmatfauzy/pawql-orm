@@ -44,14 +44,17 @@ const db = await connect({
 
 ### 2. Synchronize Database (DDL)
 
-PawQL can automatically create tables based on your schema:
+PawQL can automatically create tables based on your schema — dialect-aware:
 
 ```typescript
 await db.createTables();
-// Runs: CREATE TABLE IF NOT EXISTS "users" (...)
+// Runs dialect-correct DDL:
+// PostgreSQL: "id" UUID NOT NULL, "meta" JSONB
+// MySQL:      `id` VARCHAR(36), `meta` JSON (backticks)
+// SQLite:     "id" TEXT, "meta" TEXT, "flag" INTEGER (BOOLEAN→INTEGER)
 ```
 
-> **Note**: `createTables()` only creates tables that don't already exist. This is intended for development/prototyping — use a migration tool for production.
+> **Note**: `createTables()` only creates tables that don't already exist. This is intended for development/prototyping — use `Migrator` for production. See [Adapters Guide](./adapters.md) for type mapping.
 
 ### 3. Your First Query
 

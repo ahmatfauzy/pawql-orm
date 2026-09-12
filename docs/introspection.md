@@ -1,19 +1,18 @@
 # Schema Introspection
 
-PawQL provides a runtime function to extract and reverse-engineer a `DatabaseSchema` object from an existing database. This is entirely programmatic and avoids any CLI-based code generation, staying true to our Zero-Codegen philosophy.
+PawQL provides a runtime function to extract and reverse-engineer a `DatabaseSchema` object from an existing database. This is entirely programmatic and avoids any CLI-based code generation, staying true to our Zero-Codegen philosophy. Supports PostgreSQL, MySQL, and SQLite (via `adapter.dialect`).
 
 ## Usage
 
-You can use the `introspectDatabase` function in your own setup scripts or API endpoints.
+You can use the `introspectDatabase` function in your own setup scripts or API endpoints (no CLI).
 
 ```typescript
 import { connect, introspectDatabase } from 'pawql';
 
 async function introspect() {
-  const db = await connect({}, 'postgres://user:pass@localhost:5432/mydb');
-
-  // Extracts the schema from the live PostgreSQL database
-  const schemaCode = await introspectDatabase(db.adapter);
+  const adapter = new PostgresAdapter({ connectionString: process.env.DATABASE_URL });
+  // or MysqlAdapter / SqliteAdapter — dialect is auto-detected
+  const schemaCode = await introspectDatabase(adapter);
   
   // You can print it or write it to a file yourself using fs.writeFileSync
   console.log(schemaCode);
